@@ -5,7 +5,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from schemas.portfolio import Note, normalize_symbol
 
-Interval = Literal["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
 Operator = Literal[">", "<", ">=", "<=", "==", "crosses_above", "crosses_below"]
 
 
@@ -36,13 +35,20 @@ class Condition(BaseModel):
 
 class AlertIn(BaseModel):
     symbol: str
-    interval: Interval = "1h"
+    interval: str = "1h"
     condition: Condition
     mode: Literal["once", "repeat"] = "once"
     on_closed_candle: bool = True
     note: Note = None
 
     _symbol = field_validator("symbol")(normalize_symbol)
+
+    @field_validator("interval")
+    @classmethod
+    def _interval(cls, value: str) -> str:
+        from services.intervals import parse
+
+        return parse(value).name
 
 
 class AlertPatch(BaseModel):

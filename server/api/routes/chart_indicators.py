@@ -8,12 +8,12 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from auth import get_current_user
-from core.errors import BadRequest, NotFound
+from core.errors import NotFound
 from database.db import get_db
 from indicators.base import get_indicator, validate_params
 from models.chart_indicators import ChartIndicator
 from models.user import User
-from services.providers.base import INTERVAL_SECONDS
+from services.intervals import parse
 
 router = APIRouter(prefix="/api/chart-indicators", tags=["indicators"])
 
@@ -48,9 +48,9 @@ def _out(item: ChartIndicator) -> ChartIndicatorOut:
                              interval=item.interval, visible=item.visible, sort_order=item.sort_order)
 
 
-def _check_interval(value: Optional[str]) -> None:
-    if value is not None and value not in INTERVAL_SECONDS:
-        raise BadRequest("candles.invalid_interval", f"Unsupported interval: {value}", interval=value)
+def _check_interval(value: Optional[str]) -> Optional[str]:
+    """Validated canonical interval name (e.g. \"3D\" -> \"3d\") or None."""
+    return parse(value).name if value is not None else None
 
 
 def _get(db: Session, item_id: int, user: User) -> ChartIndicator:
@@ -70,10 +70,10 @@ def list_chart_indicators(user: User = Depends(get_current_user), db: Session = 
 @router.post("", response_model=ChartIndicatorOut, status_code=201)
 def add_chart_indicator(data: ChartIndicatorIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     params = validate_params(get_indicator(data.indicator_id), data.params)   # stores defaults for missing params
-    _check_interval(data.interval)
+    interval = _check_interval(data.interval)
     last = db.query(func.max(ChartIndicator.sort_order)).filter(ChartIndicator.user_id == user.id).scalar() or 0
     item = ChartIndicator(user_id=user.id, indicator_id=data.indicator_id, params=json.dumps(params),
-                          interval=data.interval, visible=data.visible, sort_order=last + 1)
+                          interval=interval, visible=data.visible, sort_order=last + 1)
     db.add(item)
     db.commit()
     db.refresh(item)
@@ -89,8 +89,7 @@ def update_chart_indicator(item_id: int, data: ChartIndicatorUpdate,
     if data.follow_chart:
         item.interval = None
     elif data.interval is not None:
-        _check_interval(data.interval)
-        item.interval = data.interval
+        item.interval = _check_interval(data.interval)
     if data.visible is not None:
         item.visible = data.visible
     db.commit()

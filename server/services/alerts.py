@@ -24,7 +24,7 @@ from indicators.base import OHLCV, get_indicator, validate_params
 from indicators.core import crossover, crossunder
 from models.alerts import Alert, AlertEvent
 from schemas.alerts import Condition
-from services.providers.base import INTERVAL_SECONDS
+from services.intervals import parse
 
 logger = logging.getLogger(__name__)
 
@@ -96,15 +96,15 @@ def evaluation_index(data: OHLCV, interval: str, on_closed_candle: bool, now: fl
     """Last closed candle (confirmed) or the forming one."""
     if not on_closed_candle:
         return len(data.time) - 1
-    step = INTERVAL_SECONDS[interval]
+    spec = parse(interval)
     for i in range(len(data.time) - 1, -1, -1):
-        if data.time[i] + step <= now:
+        if spec.is_closed(data.time[i], now):
             return i
     return -1
 
 
 def load_data(candle_service, symbol: str, interval: str, warmup: int, now: float) -> OHLCV:
-    step = INTERVAL_SECONDS[interval]
+    step = parse(interval).seconds
     count = warmup + EXTRA_CANDLES
     series = candle_service.get_candles(symbol, interval, int(now) - count * step, int(now), max_candles=count + 2)
     return OHLCV.from_candles(series.candles)

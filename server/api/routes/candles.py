@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from auth import get_current_user
 from schemas.common import Amount
 from services.candle_service import candle_service
-from services.providers.base import INTERVAL_SECONDS
+from services.intervals import parse
 
 router = APIRouter(prefix="/api/candles", tags=["candles"], dependencies=[Depends(get_current_user)])
 
@@ -33,20 +33,21 @@ class CandlesOut(BaseModel):
 @router.get("", response_model=CandlesOut)
 def get_candles(
     symbol: str = Query(..., description="Coin, e.g. BTC"),
-    interval: str = Query("1h", description="1m, 5m, 15m, 30m, 1h, 4h, 1d"),
+    interval: str = Query("1h", description="1m 5m 15m 30m 1h 4h 1d 1w 1M or custom like 2h, 3d, 2w, 3M"),
     limit: int = Query(500, ge=1, le=1500),
     before: Optional[int] = Query(None, description="Only candles opened before this unix time (older history)"),
 ):
     symbol = symbol.strip().upper()
-    step = INTERVAL_SECONDS.get(interval, 3600)
+    spec = parse(interval)
+    step = spec.seconds
     now = int(time.time())
     end = (before - 1) if before else now
     start = end - limit * step
-    series = candle_service.get_candles(symbol, interval, start, end, max_candles=limit + 1)
+    series = candle_service.get_candles(symbol, spec.name, start, end, max_candles=limit + 1)
     candles = [c for c in series.candles if not before or c.time < before][-limit:]
     return CandlesOut(
         symbol=symbol,
-        interval=interval,
+        interval=spec.name,
         source=series.source,
         candles=[CandleOut(**c.__dict__, closed=series.is_closed(c, now)) for c in candles],
     )

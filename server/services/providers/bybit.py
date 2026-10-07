@@ -32,7 +32,7 @@ def parse_tickers(items: list[dict], quote: str) -> dict[str, Ticker]:
 
 
 CANDLES_URL = "https://api.bybit.com/v5/market/kline"
-BYBIT_INTERVALS = {"1m": "1", "5m": "5", "15m": "15", "30m": "30", "1h": "60", "4h": "240", "1d": "D"}
+BYBIT_INTERVALS = {"1m": "1", "5m": "5", "15m": "15", "30m": "30", "1h": "60", "4h": "240", "1d": "D", "1w": "W", "1M": "M"}
 BYBIT_PAGE = 1000  # kline returns at most 1000 rows per request
 
 

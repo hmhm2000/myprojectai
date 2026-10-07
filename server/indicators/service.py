@@ -7,7 +7,7 @@ from typing import Optional
 import indicators  # noqa: F401  (loads built-in and custom indicators)
 from indicators.base import OHLCV, get_indicator, validate_params
 from indicators.core import Series
-from services.providers.base import INTERVAL_SECONDS
+from services.intervals import Interval, parse
 
 MAX_CANDLES = 6000
 
@@ -21,8 +21,13 @@ class IndicatorResult:
     outputs: dict[str, Series]
 
 
-def map_to_chart(source_times: list[int], source_step: int, values: Series,
-                 chart_times: list[int], chart_step: int, now: float) -> Series:
+def _end_fn(interval):
+    """Candle end (= next candle start) for an Interval or a fixed step in seconds."""
+    return interval.next_start if isinstance(interval, Interval) else (lambda t: t + interval)
+
+
+def map_to_chart(source_times: list[int], source_interval, values: Series,
+                 chart_times: list[int], chart_interval, now: float) -> Series:
     """Values computed on another timeframe, placed on the chart candles - without look-ahead.
 
     A chart candle gets the value of the last source candle that is CLOSED by the end of that chart
@@ -30,16 +35,18 @@ def map_to_chart(source_times: list[int], source_step: int, values: Series,
     candle shows the provisional value of the forming source candle - like TradingView's
     request.security with lookahead off after a reload.
     """
+    source_end = _end_fn(source_interval)
+    chart_end_of = _end_fn(chart_interval)
     out: Series = []
     j = -1                                  # last source candle closed by the end of the chart candle
     for t in chart_times:
-        chart_end = t + chart_step
-        while j + 1 < len(source_times) and source_times[j + 1] + source_step <= chart_end:
+        chart_end = chart_end_of(t)
+        while j + 1 < len(source_times) and source_end(source_times[j + 1]) <= chart_end:
             j += 1
         k = j
         nxt = j + 1
         live = chart_end > now              # the current chart candle
-        if live and nxt < len(source_times) and source_times[nxt] <= t and source_times[nxt] + source_step > now:
+        if live and nxt < len(source_times) and source_times[nxt] <= t and source_end(source_times[nxt]) > now:
             k = nxt                         # the forming source candle (live value)
         out.append(values[k] if k >= 0 else None)
     return out
@@ -55,9 +62,11 @@ def compute_indicator(candle_service, indicator_id: str, raw_params: Optional[di
     """
     indicator = get_indicator(indicator_id)
     params = validate_params(indicator, raw_params)
-    step = INTERVAL_SECONDS.get(interval, 3600)
-    source_interval = indicator_interval or interval
-    source_step = INTERVAL_SECONDS.get(source_interval, step)
+    chart_spec = parse(interval)
+    source_spec = parse(indicator_interval or interval)
+    source_interval = source_spec.name
+    interval = chart_spec.name
+    source_step = source_spec.seconds
     warmup = indicator.warmup(params)
     extra = 0 if source_interval == interval else 1   # one more source candle for the mapping
     fetch_start = start - (warmup + extra) * source_step
@@ -68,7 +77,7 @@ def compute_indicator(candle_service, indicator_id: str, raw_params: Optional[di
     outputs = indicator.compute(data, params)
 
     if source_interval == interval:
-        first = next((i for i, t in enumerate(data.time) if t >= start - start % step), len(data.time))
+        first = next((i for i, t in enumerate(data.time) if t >= chart_spec.bucket_start(start)), len(data.time))
         return IndicatorResult(
             indicator_id=indicator.id,
             params=params,
@@ -77,12 +86,12 @@ def compute_indicator(candle_service, indicator_id: str, raw_params: Optional[di
             outputs={name: values[first:] for name, values in outputs.items()},
         )
 
-    chart_times = list(range(start - start % step, end + 1, step))
+    chart_times = chart_spec.times(start, end)
     return IndicatorResult(
         indicator_id=indicator.id,
         params=params,
         time=chart_times,
-        closed=[t + step <= now for t in chart_times],
-        outputs={name: map_to_chart(data.time, source_step, values, chart_times, step, now)
+        closed=[chart_spec.is_closed(t, now) for t in chart_times],
+        outputs={name: map_to_chart(data.time, source_spec, values, chart_times, chart_spec, now)
                  for name, values in outputs.items()},
     )

@@ -33,7 +33,8 @@ def parse_tickers(items: list[dict], quote: str) -> dict[str, Ticker]:
 
 
 CANDLES_URL = "https://www.okx.com/api/v5/market/history-candles"
-OKX_BARS = {"1m": "1m", "5m": "5m", "15m": "15m", "30m": "30m", "1h": "1H", "4h": "4H", "1d": "1Dutc"}
+OKX_BARS = {"1m": "1m", "5m": "5m", "15m": "15m", "30m": "30m", "1h": "1H", "4h": "4H", "1d": "1Dutc",
+            "1w": "1Wutc", "1M": "1Mutc"}
 OKX_PAGE = 100  # history-candles returns at most 100 rows per request
 
 

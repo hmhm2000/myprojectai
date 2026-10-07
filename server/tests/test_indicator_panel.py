@@ -67,7 +67,7 @@ def test_chart_indicator_settings_per_user(client, monkeypatch):
 
     bad = client.post("/api/chart-indicators", json={"indicator_id": "sma", "params": {"length": 0}}, headers=headers)
     assert bad.json()["code"] == "indicators.invalid_param"
-    bad = client.post("/api/chart-indicators", json={"indicator_id": "sma", "interval": "2h"}, headers=headers)
+    bad = client.post("/api/chart-indicators", json={"indicator_id": "sma", "interval": "2x"}, headers=headers)
     assert bad.json()["code"] == "candles.invalid_interval"
 
     assert [i["indicator_id"] for i in client.get("/api/chart-indicators", headers=headers).json()] == ["sma", "rsi"]
