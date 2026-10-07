@@ -100,3 +100,53 @@ def crossunder(a: Sequence[Optional[float]], b: Sequence[Optional[float]]) -> li
         values = (a[i], b[i], a[i - 1], b[i - 1])
         out.append(None not in values and a[i] < b[i] and a[i - 1] >= b[i - 1])
     return out
+
+
+def ago(src: Sequence, n: int) -> list:
+    """Pine's src[n]: the value n candles back (na for the first n candles)."""
+    return [None] * min(n, len(src)) + list(src[:len(src) - n]) if n > 0 else list(src)
+
+
+def offset_left(src: Sequence, n: int) -> list:
+    """Pine's plot(..., offset=-n): the value computed on candle i is drawn on candle i - n."""
+    return list(src[n:]) + [None] * min(n, len(src))
+
+
+def valuewhen(condition: Sequence, src: Sequence) -> list:
+    """Pine's valuewhen(condition, src, 0): src at the most recent candle where condition was true."""
+    out, last = [], None
+    for cond, value in zip(condition, src):
+        if truthy(cond):
+            last = value
+        out.append(last)
+    return out
+
+
+def truthy(value) -> bool:
+    """A Pine series used as a condition: na and 0 are false."""
+    return value is not None and value is not False and value != 0
+
+
+def true_range(high: Sequence[float], low: Sequence[float], close: Sequence[float]) -> Series:
+    """Pine's tr: high - low on the first candle, then the largest of the three distances."""
+    out: Series = []
+    for i, (h, l) in enumerate(zip(high, low)):
+        out.append(h - l if i == 0 else max(h - l, abs(h - close[i - 1]), abs(l - close[i - 1])))
+    return out
+
+
+def atr(high: Sequence[float], low: Sequence[float], close: Sequence[float], length: int) -> Series:
+    """Pine's atr(length) = rma(tr, length)."""
+    return rma(true_range(high, low, close), length)
+
+
+def stoch(src: Sequence[Optional[float]], high: Sequence[Optional[float]], low: Sequence[Optional[float]],
+          length: int) -> Series:
+    """Pine's stoch: 100 * (src - lowest(low)) / (highest(high) - lowest(low)); a flat range gives na."""
+    hi, lo = highest(high, length), lowest(low, length)
+    return [None if None in (s, h, l) or h == l else 100 * (s - l) / (h - l) for s, h, l in zip(src, hi, lo)]
+
+
+def cross(a: Sequence[Optional[float]], b: Sequence[Optional[float]]) -> list[bool]:
+    """Pine's cross: crossed in either direction."""
+    return [up or down for up, down in zip(crossover(a, b), crossunder(a, b))]
