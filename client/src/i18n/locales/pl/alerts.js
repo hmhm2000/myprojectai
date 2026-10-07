@@ -16,10 +16,28 @@ export default {
       once: "Jednorazowy (potem się wyłącza)",
       repeat: "Powtarzalny (za każdym razem, gdy warunek znów się spełni)",
     },
-    closedCandle: "Tylko na zamkniętej świecy (potwierdzone wartości)",
+    trigger: "Kiedy sprawdzać",
     note: "Notatka (opcjonalnie)",
     submit: "Dodaj alert",
     invalidValue: "Podaj liczbę po prawej stronie warunku",
+  },
+  // Tryby wyzwalania: kiedy warunek jest sprawdzany. Zawsze wyzwala przy zmianie „niespełniony → spełniony”.
+  triggers: {
+    intrabar: {
+      label: "Natychmiast (w trakcie świecy)",
+      short: "natychmiast",
+      hint: "Sprawdzane co minutę na bieżącej, jeszcze otwartej świecy. Najszybsze, ale wartość może się jeszcze zmienić do końca świecy. Maks. jedno wyzwolenie na świecę.",
+    },
+    bar_open: {
+      label: "Na otwarciu nowej świecy",
+      short: "otwarcie świecy",
+      hint: "Sprawdzane raz, gdy otwiera się nowa świeca - na wartościach z chwili otwarcia (cena otwarcia nowej świecy).",
+    },
+    bar_close: {
+      label: "Po zamknięciu świecy",
+      short: "zamknięcie świecy",
+      hint: "Sprawdzane raz, po zamknięciu świecy - potwierdzone wartości, które już się nie zmienią.",
+    },
   },
   operandTypes: {
     price: "Cena",
@@ -56,7 +74,6 @@ export default {
     checkResult: "{{left}} vs {{right}} → {{result}}",
     met: "spełniony",
     notMet: "niespełniony",
-    closedOnly: "zamknięta świeca",
   },
   events: {
     title: "Historia wyzwoleń",
