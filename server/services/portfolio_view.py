@@ -5,7 +5,7 @@ from models.portfolio import Portfolio, Position
 from schemas.portfolio import (
     CoinOut, GroupOut, PortfolioListItem, PortfolioOut, PositionOut, PriceInfo, PricesMeta, SaleOut, SummaryOut,
 )
-from services.pnl import GroupMetrics, group_metrics, position_metrics
+from services.pnl import GroupMetrics, average_prices, group_metrics, position_metrics
 from services.price_service import Snapshot
 
 
@@ -61,6 +61,7 @@ def _coins_and_summary(portfolio: Portfolio, snapshot: Snapshot) -> tuple[list[C
         metrics = [m for _, m in pairs]
         all_metrics.extend(metrics)
         group = group_metrics(metrics)
+        averages = average_prices(pairs)
         # Zapisana kolejność (przeciąganie); sortowanie wg daty/ceny robi frontend.
         pairs.sort(key=lambda pm: (pm[0].sort_order, pm[0].id))
         coins.append(CoinOut(
@@ -68,6 +69,8 @@ def _coins_and_summary(portfolio: Portfolio, snapshot: Snapshot) -> tuple[list[C
             price=PriceInfo(price=quote.price, change_24h_pct=quote.change_24h_pct,
                             source=quote.source, stale=quote.stale) if quote else None,
             open_quantity=group.open_quantity,
+            avg_buy_price=averages.avg_buy_price,
+            break_even_price=averages.break_even_price,
             missing_price=group.missing_price,
             open_positions=sum(1 for m in metrics if not m.is_closed),
             closed_positions=sum(1 for m in metrics if m.is_closed),

@@ -352,9 +352,10 @@ export default function PortfoliosPage() {
               )
             ) : (
               <>
-                <div className="hidden grid-cols-[1.6fr_1fr_1fr_1fr_1.3fr_auto] gap-x-4 px-4 text-[10px] uppercase tracking-wider text-zinc-500 md:grid">
+                <div className="hidden grid-cols-[1.5fr_1fr_1.1fr_1fr_1fr_1.3fr_auto] gap-x-4 px-4 text-[10px] uppercase tracking-wider text-zinc-500 md:grid">
                   <span>Coin</span>
                   <span>Ilość</span>
+                  <span title="Ważona ilością, która została na otwartych pozycjach">Śr. cena zakupu</span>
                   <span>Wartość</span>
                   <span>Zainwestowane</span>
                   <span className="text-right">Zysk / strata</span>
