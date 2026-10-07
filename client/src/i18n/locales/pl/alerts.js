@@ -17,6 +17,7 @@ export default {
       repeat: "Powtarzalny (za każdym razem, gdy warunek znów się spełni)",
     },
     trigger: "Kiedy sprawdzać",
+    settings: "Ustawienia wskaźnika ({{count}})",
     note: "Notatka (opcjonalnie)",
     submit: "Dodaj alert",
     invalidValue: "Podaj liczbę po prawej stronie warunku",

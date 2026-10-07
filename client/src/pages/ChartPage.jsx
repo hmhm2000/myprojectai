@@ -187,7 +187,10 @@ export default function ChartPage() {
           onMarkerClick={(hits) => setSelected(hits.map((m) => m.id))}
           onReady={setChartApi}
           onBarsChange={onBarsChange}
-          extraPanes={activeIndicators.filter((a) => definitions.find((d) => d.id === a.id)?.pane === "separate").length}
+          extraPanes={activeIndicators.reduce((sum, a) => {
+            const def = definitions.find((d) => d.id === a.id);
+            return def?.pane === "separate" ? sum + (def.outputs.length > 10 ? 2 : 1) : sum;  // same sizes as useIndicators
+          }, 0)}
         />
       </div>
       </div>

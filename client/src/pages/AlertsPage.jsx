@@ -3,23 +3,23 @@ import { errorMessage } from "../api/client";
 import { alertsApi, indicatorsApi } from "../api/endpoints";
 import CoinPicker from "../components/CoinPicker";
 import { ErrorBanner } from "../components/ui";
-import { hasTranslation, t } from "../i18n";
+import { t } from "../i18n";
 import { conditionText, operandLabel } from "../lib/alertText";
+import { SOURCES, alertOutputs, defaultParams, outputLabel, paramLabel } from "../lib/indicatorMeta";
+import ParamFields from "../components/chart/ParamFields";
 import { fmtDateTime, fmtPrice } from "../lib/format";
 import { intervalLabel, intervalOptions } from "../lib/intervals";
 import { useChartIntervals } from "../lib/useChartIntervals";
 
 const TRIGGERS = ["intrabar", "bar_open", "bar_close"];
 const OPERATORS = [">", "<", ">=", "<=", "==", "crosses_above", "crosses_below"];
-const SOURCES = ["close", "open", "high", "low", "hl2", "hlc3", "ohlc4"];
-const paramLabel = (name) => (hasTranslation(`chart.params.${name}`) ? t(`chart.params.${name}`) : name);
 const changed = () => window.dispatchEvent(new Event("alerts:changed"));
 
 function defaultOperand(type, definitions) {
   if (type === "price") return { type: "price" };
   if (type === "value") return { type: "value", value: "" };
   const def = definitions.find((d) => d.id === "rsi") ?? definitions[0];
-  return { type: "indicator", id: def.id, params: Object.fromEntries(def.params.map((p) => [p.name, p.default])), output: def.outputs[0].name };
+  return { type: "indicator", id: def.id, params: defaultParams(def), output: alertOutputs(def)[0].name };
 }
 
 /** One side of a condition: price, a fixed value or an indicator output with parameters. */
@@ -40,9 +40,17 @@ function OperandEditor({ operand, onChange, definitions }) {
             onChange={(e) => onChange({ ...defaultOperand("indicator", definitions.filter((d) => d.id === e.target.value)) })}>
             {definitions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
-          {def.params.map((p) => (
+          {def.params.some((p) => p.group) ? (
+            <details className="w-full">
+              <summary className="cursor-pointer text-xs text-zinc-400">{t("alerts.form.settings", { count: def.params.length })}</summary>
+              <div className="mt-2">
+                <ParamFields def={def} params={operand.params} idPrefix={`alert-${def.id}`}
+                  onChange={(params) => onChange({ ...operand, params })} />
+              </div>
+            </details>
+          ) : def.params.map((p) => (
             <label key={p.name} className="flex items-center gap-1 text-xs text-zinc-500">
-              {paramLabel(p.name)}
+              {paramLabel(def, p)}
               {p.type === "source" ? (
                 <select className="py-1 text-xs" value={operand.params[p.name]}
                   onChange={(e) => onChange({ ...operand, params: { ...operand.params, [p.name]: e.target.value } })}>
@@ -54,13 +62,9 @@ function OperandEditor({ operand, onChange, definitions }) {
               )}
             </label>
           ))}
-          {def.outputs.length > 1 && (
+          {alertOutputs(def).length > 1 && (
             <select value={operand.output} className="text-sm" onChange={(e) => onChange({ ...operand, output: e.target.value })}>
-              {def.outputs.map((o) => (
-                <option key={o.name} value={o.name}>
-                  {hasTranslation(`alerts.outputs.${o.name}`) ? t(`alerts.outputs.${o.name}`) : o.name}
-                </option>
-              ))}
+              {alertOutputs(def).map((o) => <option key={o.name} value={o.name}>{outputLabel(def, o)}</option>)}
             </select>
           )}
         </>

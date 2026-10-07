@@ -1,14 +1,12 @@
 import { useState } from "react";
 import { errorMessage } from "../../api/client";
-import { hasTranslation, t } from "../../i18n";
+import { t } from "../../i18n";
 import Modal from "../Modal";
 import { Field } from "../ui";
+import { defaultParams as defaults } from "../../lib/indicatorMeta";
 import { intervalLabel, intervalOptions } from "../../lib/intervals";
 import { useChartIntervals } from "../../lib/useChartIntervals";
-
-const SOURCES = ["close", "open", "high", "low", "hl2", "hlc3", "ohlc4"];
-const paramLabel = (name) => (hasTranslation(`chart.params.${name}`) ? t(`chart.params.${name}`) : name);
-const defaults = (def) => Object.fromEntries(def.params.map((p) => [p.name, p.default]));
+import ParamFields from "./ParamFields";
 
 /**
  * Add / edit one chart indicator. The fields come from the indicator definition (backend), so every
@@ -49,7 +47,8 @@ export default function IndicatorModal({ definitions, item = null, onSave, onRes
   };
 
   return (
-    <Modal title={editing ? t("chart.indicators.editTitle", { name: def?.name ?? "" }) : t("chart.indicators.addTitle")} onClose={onClose}>
+    <Modal title={editing ? t("chart.indicators.editTitle", { name: def?.name ?? "" }) : t("chart.indicators.addTitle")} onClose={onClose}
+      wide={(def?.params.length ?? 0) > 8}>
       <form onSubmit={submit} className="space-y-4">
         {!editing && (
           <Field label={t("chart.indicators.indicator")} htmlFor="ind-id">
@@ -60,21 +59,14 @@ export default function IndicatorModal({ definitions, item = null, onSave, onRes
         )}
         {def?.description && <p className="text-xs text-zinc-500">{def.description}</p>}
 
+        {def && <ParamFields def={def} params={params} onChange={setParams} />}
+        {def && (
+          <button type="button" className="text-xs text-zinc-400 hover:text-zinc-200 hover:underline"
+            onClick={() => setParams(defaults(def))}>
+            {t("chart.indicators.defaultsInForm")}
+          </button>
+        )}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {def?.params.map((p) => (
-            <Field key={p.name} label={paramLabel(p.name)} htmlFor={`ind-${p.name}`}>
-              {p.type === "source" ? (
-                <select id={`ind-${p.name}`} className="w-full" value={params[p.name] ?? p.default}
-                  onChange={(e) => setParams({ ...params, [p.name]: e.target.value })}>
-                  {SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              ) : (
-                <input id={`ind-${p.name}`} type="number" className="w-full" value={params[p.name] ?? p.default}
-                  step={p.type === "int" ? 1 : "any"} min={p.min ?? undefined} max={p.max ?? undefined}
-                  onChange={(e) => setParams({ ...params, [p.name]: e.target.value })} required />
-              )}
-            </Field>
-          ))}
           <Field label={t("chart.indicators.interval")} htmlFor="ind-interval" hint={t("chart.indicators.intervalHint")}>
             <select id="ind-interval" className="w-full" value={interval} onChange={(e) => setInterval(e.target.value)}>
               <option value="">{t("chart.indicators.followChart")}</option>
