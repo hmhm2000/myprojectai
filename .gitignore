@@ -1,0 +1,43 @@
+# Ignoruj bazę danych SQLite
+**/db/*.db
+
+# Ignoruj środowisko wirtualne (jeśli używasz)
+venv/
+env/
+
+# Ignoruj pliki konfiguracyjne lokalne
+*.env
+.env
+
+# Ignoruj pliki Pythona generowane (cache, pliki tymczasowe)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Ignoruj pliki Node.js (jeśli używasz frontendu React)
+node_modules/
+dist/
+build/
+
+# Ignoruj pliki IDE (np. VS Code, PyCharm)
+.vscode/
+.idea/
+
+# Ignoruj pliki logów (jeśli je masz)
+*.log
+
+# Ignoruj pliki tymczasowe
+*.tmp
+*.bak
+*.zip
+# Ignoruj pliki txt (poza requirements)
+*.txt
+!requirements.txt
+
+# Ignoruj pliki mcaps
+mcps/
+
+# Testy
+.pytest_cache/
