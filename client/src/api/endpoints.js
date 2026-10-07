@@ -50,6 +50,16 @@ export const candlesApi = {
     data(api.get("/api/candles", { params: { symbol, interval, limit, ...(before ? { before } : {}) } })),
 };
 
+export const alertsApi = {
+  list: () => data(api.get("/api/alerts")),
+  create: (body) => data(api.post("/api/alerts", body)),
+  update: (id, body) => data(api.patch(`/api/alerts/${id}`, body)),
+  remove: (id) => api.delete(`/api/alerts/${id}`),
+  check: (id) => data(api.get(`/api/alerts/${id}/check`)),
+  events: ({ unseenOnly = false } = {}) => data(api.get("/api/alerts/events", { params: { unseen_only: unseenOnly } })),
+  markSeen: (ids = null) => api.post("/api/alerts/events/seen", ids ? { ids } : {}),
+};
+
 export const indicatorsApi = {
   list: () => data(api.get("/api/indicators")),
   values: (id, { symbol, interval, start, end, params }) =>

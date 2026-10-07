@@ -4,6 +4,7 @@ import Layout from "./components/Layout";
 import { AuthProvider } from "./context/AuthProvider";
 import { useAuth } from "./context/contexts";
 import { PriceProvider } from "./context/PriceProvider";
+import AlertsPage from "./pages/AlertsPage";
 import FavoritesPage from "./pages/FavoritesPage";
 import JournalPage from "./pages/JournalPage";
 import LoginPage from "./pages/LoginPage";
@@ -46,6 +47,7 @@ function AppRoutes() {
         <Route path="/portfolios" element={<PortfoliosPage />} />
         <Route path="/journal" element={<JournalPage />} />
         <Route path="/chart" element={<Suspense fallback={<FullScreenLoader />}><ChartPage /></Suspense>} />
+        <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/favorites" element={<FavoritesPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>

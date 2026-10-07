@@ -492,3 +492,36 @@ W `locales/pl/index.js` są też format liczb i dat (`pl-PL`) oraz symbol waluty
   - Lista aktywnych wskaźników zapamiętuje się w przeglądarce.
   - Przy doładowaniu starszej historii pobiera się tylko brakujący kawałek wskaźnika, a przy odświeżaniu tylko kilka ostatnich świec.
 - Testy: `server/tests/test_indicators.py`, z wartościami policzonymi ręcznie z definicji Pine, przypadkami brzegowymi i zbieżnością rozgrzewki.
+
+---
+
+## Etap 16: alerty
+
+- Nowa strona **Alerty** w menu, z licznikiem nieprzeczytanych wyzwoleń.
+- **Warunek** ma postać „lewa strona, operator, prawa strona”.
+  - Każda strona może być **ceną**, **liczbą** albo **wskaźnikiem** (wybierasz wskaźnik, parametry i wyjście, np. dolną wstęgę BB albo sygnał MACD).
+  - Operatory: większe, mniejsze, większe lub równe, mniejsze lub równe, równe, **przecina w górę**, **przecina w dół** (jak `ta.crossover` / `ta.crossunder`).
+  - Przykłady: `BTC Cena > 110000`, `BTC RSI(14) < 30`, `BTC Cena < BB(20, 2) dolna`, `MACD przecina w górę sygnał`.
+- **Sprawdzanie:** serwer sprawdza alerty raz na minutę (`ALERT_CHECK_SECONDS` w `server/.env`, `0` wyłącza), także gdy aplikacja jest zamknięta. Używa **tej samej logiki wskaźników** co wykres (`server/indicators`), bez osobnych obliczeń.
+  - Domyślnie liczy na **zamkniętej świecy** (potwierdzone wartości). Można to wyłączyć i liczyć na bieżącej świecy, czyli na aktualnej cenie.
+  - Alert wyzwala się, gdy warunek **zaczyna** być spełniony, więc nie spamuje co minutę, kiedy dalej trwa.
+  - **Jednorazowy:** po wyzwoleniu sam się wyłącza.
+  - **Powtarzalny:** wyzwala się ponownie, gdy warunek najpierw przestanie, a potem znów zacznie być spełniony.
+- **Sprawdź teraz** pokazuje bieżące wartości obu stron warunku, np. „RSI(14): 47,81 · 30 → niespełniony”, bez zmieniania alertu.
+- **Powiadomienia:**
+  - historia wyzwoleń na stronie (z wartościami i ceną);
+  - licznik w menu;
+  - powiadomienie systemowe przeglądarki, gdy aplikacja jest otwarta (także w tle). Pozwolenie włączasz przyciskiem na stronie Alerty.
+- **API:** `GET/POST /api/alerts`, `PATCH/DELETE /api/alerts/{id}`, `GET /api/alerts/{id}/check`, `GET /api/alerts/events`, `POST /api/alerts/events/seen`.
+- Migracja `e3b9c7d1f4a6` (tabele `alerts`, `alert_events`) jest już zastosowana w Twojej bazie. Kopia sprzed migracji: `server/db/database.pre-alerts.bak`.
+- Testy: `server/tests/test_alerts.py`. Cały zestaw backendu: 68 testów.
+
+---
+
+## Etap 6 (własne wskaźniki z Pine Script): czeka na Twój kod
+
+Infrastruktura jest gotowa. Gdy wkleisz kod konkretnego wskaźnika Pine:
+1. przeanalizuję tylko ten wskaźnik (parametry, smoothing, lookback, wartości startowe, `na`, offsety, crossover, timeframe, potwierdzanie świec);
+2. przetłumaczę logikę na Pythona, w pliku `server/indicators/custom/<nazwa>.py`, korzystając z prymitywów zgodnych z Pine (`ta.sma`, `ta.ema`, `ta.rma`, `ta.stdev`, crossover…);
+3. wskaźnik od razu pojawi się na wykresie i w alertach. Sygnały BUY/SELL będą wyjściem typu `signal` (1 / −1), więc alert „MyIndicator = BUY” to warunek `wyjście == 1`;
+4. dodam testy tej implementacji, a jeśli podasz wartości z TradingView dla kilku świec (np. z okna danych), porównam wynik liczbowo.
