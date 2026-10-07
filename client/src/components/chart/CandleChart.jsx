@@ -144,8 +144,19 @@ export default function CandleChart({ symbol, interval, markers = [], onMarkerCl
       if (bars.length) barsChangeRef.current?.({ first: bars[0].unix, last: bars[bars.length - 1].unix });
     };
 
+    // Candle colors from an indicator (Pine barcolor, e.g. PVSRA): unix -> color, null = default colors.
+    let barColors = null;
+    const colored = (bar) => {
+      const color = barColors?.get(bar.unix);
+      return color ? { ...bar, color, borderColor: color, wickColor: color } : bar;
+    };
+    const setBarColors = (colors) => {
+      barColors = colors;
+      candles.setData(bars.map(colored));
+    };
+
     const setAll = () => {
-      candles.setData(bars);
+      candles.setData(barColors ? bars.map(colored) : bars);
       volume.setData(bars.map(volumeBar));
       applyMarkers();
       notifyBars();
@@ -180,7 +191,7 @@ export default function CandleChart({ symbol, interval, markers = [], onMarkerCl
           if (bar.time < bars[bars.length - 1].time) continue;
           if (bar.time === bars[bars.length - 1].time) bars[bars.length - 1] = bar;
           else bars.push(bar);
-          candles.update(bar);
+          candles.update(colored(bar));
           volume.update(volumeBar(bar));
         }
         applyMarkers();
@@ -201,7 +212,7 @@ export default function CandleChart({ symbol, interval, markers = [], onMarkerCl
         setAll();
         chart.timeScale().fitContent();
         setState({ loading: false, error: null, source: data.source });
-        readyRef.current?.({ chart, candles, toChartTime, getBars: () => bars });
+        readyRef.current?.({ chart, candles, toChartTime, getBars: () => bars, setBarColors });
       } catch (err) {
         if (!disposed) setState({ loading: false, error: errorMessage(err), source: null });
       }

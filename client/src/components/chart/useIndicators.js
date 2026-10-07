@@ -18,7 +18,7 @@ export function useIndicators(api, active, definitions, symbol, interval) {
   const cache = useRef({ api: null, layers: new Map() }); // uid -> { values, first, last } for this chart
 
   const draw = useCallback((layer) => {
-    if (api) drawOutputs(api.toChartTime, layer);
+    if (api) drawOutputs(api, layer);
   }, [api]);
 
   const fetchInto = useCallback(async (layer, start, end) => {
@@ -57,7 +57,7 @@ export function useIndicators(api, active, definitions, symbol, interval) {
         const paneIndex = def.pane === "overlay" ? 0 : ++pane;
         if (paneIndex) paneSize[paneIndex] = def.outputs.length > 10 ? 2 : 1;
         const series = createOutputSeries(api.chart, def, params, paneIndex);
-        const firstSeries = Object.values(series)[0]?.series;
+        const firstSeries = Object.values(series).find((s) => s.series)?.series;
         def.levels.forEach((price) => firstSeries?.createPriceLine({ price, color: "rgba(161,161,170,0.4)", lineStyle: 2, lineWidth: 1, axisLabelVisible: false }));
         const known = saved.get(uid);
         return { uid, id, def, params, interval: ownInterval ?? null, series, values: known?.values ?? new Map(),
@@ -82,7 +82,7 @@ export function useIndicators(api, active, definitions, symbol, interval) {
     return () => {
       for (const layer of layers.current) {
         saved.set(layer.uid, { values: layer.values, first: layer.first, last: layer.last });
-        removeOutputSeries(api.chart, layer.series);
+        removeOutputSeries(api, layer.series);
       }
       layers.current = [];
     };

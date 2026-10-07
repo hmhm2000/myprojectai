@@ -83,3 +83,56 @@ export class BandSeries {
     return { ...customSeriesDefaultOptions, color: "rgba(161,161,170,0.1)" };
   }
 }
+
+// Pane background behind candles (Pine's bgcolor): data { time, fill? } - a candle with `fill` gets
+// a full-height rectangle as wide as the candle slot; without `fill` (whitespace) nothing is drawn.
+class BackgroundRenderer {
+  data = null;
+  options = null;
+
+  update(data, options) {
+    this.data = data;
+    this.options = options;
+  }
+
+  draw(target) {
+    const { data, options } = this;
+    if (!data?.visibleRange || !data.bars.length) return;
+    target.useBitmapCoordinateSpace(({ context: ctx, horizontalPixelRatio: hr, bitmapSize }) => {
+      const half = (data.barSpacing * (data.conflationFactor || 1) * hr) / 2;
+      for (let i = data.visibleRange.from; i < data.visibleRange.to; i++) {
+        const { x, originalData: d } = data.bars[i];
+        if (d.fill === undefined) continue;
+        ctx.fillStyle = d.fill || options.color;
+        const left = Math.round(x * hr - half);
+        ctx.fillRect(left, 0, Math.round(x * hr + half) - left, bitmapSize.height);
+      }
+    });
+  }
+}
+
+export class BackgroundSeries {
+  constructor() {
+    this._renderer = new BackgroundRenderer();
+  }
+
+  priceValueBuilder() {
+    return [];                      // no influence on the price scale
+  }
+
+  isWhitespace(d) {
+    return d.fill === undefined;
+  }
+
+  renderer() {
+    return this._renderer;
+  }
+
+  update(data, options) {
+    this._renderer.update(data, options);
+  }
+
+  defaultOptions() {
+    return { ...customSeriesDefaultOptions, color: "rgba(161,161,170,0.1)" };
+  }
+}
