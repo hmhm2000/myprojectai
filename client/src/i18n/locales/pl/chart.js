@@ -10,6 +10,7 @@ export default {
     exitReason: "Powód wyjścia",
     plan: "Plan",
     fromPosition: "{{quantity}} z zakupu {{date}} po {{price}}",
+    showAll: "Pokaż transakcje na wykresie",
     showOnChart: "Pokaż na wykresie",
     hideOnChart: "Ukryj na wykresie",
   },

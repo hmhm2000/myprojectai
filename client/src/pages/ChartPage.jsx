@@ -14,6 +14,7 @@ import { EyeIcon } from "../components/icons";
 
 const INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"];
 const INDICATORS_KEY = "chart:indicators";
+const SHOW_TRADES_KEY = "chart:showTrades";
 
 function readActive() {
   try {
@@ -98,6 +99,7 @@ export default function ChartPage() {
   const [chartApi, setChartApi] = useState(null);
   const [definitions, setDefinitions] = useState([]);
   const [activeIndicators, setActiveIndicators] = useState(readActive);
+  const [showTrades, setShowTrades] = useState(() => localStorage.getItem(SHOW_TRADES_KEY) !== "false");
   const onBarsChange = useIndicators(chartApi, activeIndicators, definitions, symbol, interval);
 
   useEffect(() => {
@@ -107,6 +109,10 @@ export default function ChartPage() {
   useEffect(() => {
     localStorage.setItem(INDICATORS_KEY, JSON.stringify(activeIndicators));
   }, [activeIndicators]);
+
+  useEffect(() => {
+    localStorage.setItem(SHOW_TRADES_KEY, String(showTrades));
+  }, [showTrades]);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,8 +126,8 @@ export default function ChartPage() {
 
   // Only trades marked "show on chart"; the marker uses the real trade time and price.
   const markers = useMemo(
-    () => events.filter((e) => e.showOnChart).map(({ id, side, time, price }) => ({ id, side, time, price })),
-    [events],
+    () => (showTrades ? events : []).filter((e) => e.showOnChart).map(({ id, side, time, price }) => ({ id, side, time, price })),
+    [events, showTrades],
   );
 
   const toggleOnChart = async (event) => {
@@ -158,7 +164,13 @@ export default function ChartPage() {
         </div>
       </div>
 
-      <IndicatorPanel definitions={definitions} active={activeIndicators} onChange={setActiveIndicators} />
+      <div className="flex flex-wrap items-center gap-4">
+        <IndicatorPanel definitions={definitions} active={activeIndicators} onChange={setActiveIndicators} />
+        <label className="flex items-center gap-2 text-xs text-zinc-400">
+          <input type="checkbox" checked={showTrades} onChange={(e) => setShowTrades(e.target.checked)} />
+          {t("chart.trades.showAll")}
+        </label>
+      </div>
 
       <div className="tile p-2">
         <CandleChart
