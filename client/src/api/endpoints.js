@@ -45,6 +45,10 @@ export const portfoliosApi = {
   removeSale: (groupId) => data(api.delete(`/api/sale-groups/${groupId}`)),
 };
 
+export const journalApi = {
+  stats: (portfolioId = null) => data(api.get("/api/journal/stats", { params: portfolioId ? { portfolio_id: portfolioId } : {} })),
+};
+
 export const favoritesApi = {
   list: () => data(api.get("/api/favorite-lists")),
   create: (name) => data(api.post("/api/favorite-lists", { name })),

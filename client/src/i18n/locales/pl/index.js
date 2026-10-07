@@ -9,6 +9,7 @@ import coins from "./coins.js";
 import common from "./common.js";
 import errors from "./errors.js";
 import favorites from "./favorites.js";
+import journal from "./journal.js";
 import nav from "./nav.js";
 import portfolio from "./portfolio.js";
 import position from "./position.js";
@@ -27,6 +28,7 @@ export default {
   common,
   errors,
   favorites,
+  journal,
   nav,
   portfolio,
   position,

@@ -5,6 +5,7 @@ import { AuthProvider } from "./context/AuthProvider";
 import { useAuth } from "./context/contexts";
 import { PriceProvider } from "./context/PriceProvider";
 import FavoritesPage from "./pages/FavoritesPage";
+import JournalPage from "./pages/JournalPage";
 import LoginPage from "./pages/LoginPage";
 import PortfoliosPage from "./pages/PortfoliosPage";
 import RegisterPage from "./pages/RegisterPage";
@@ -40,6 +41,7 @@ function AppRoutes() {
     <Routes>
       <Route element={<Layout />}>
         <Route path="/portfolios" element={<PortfoliosPage />} />
+        <Route path="/journal" element={<JournalPage />} />
         <Route path="/favorites" element={<FavoritesPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>

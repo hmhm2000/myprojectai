@@ -1,10 +1,11 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../context/contexts";
 import { t } from "../i18n";
-import { LogoutIcon, SettingsIcon, StarIcon, WalletIcon } from "./icons";
+import { BookIcon, LogoutIcon, SettingsIcon, StarIcon, WalletIcon } from "./icons";
 
 const LINKS = [
   { to: "/portfolios", labelKey: "nav.portfolios", Icon: WalletIcon },
+  { to: "/journal", labelKey: "nav.journal", Icon: BookIcon },
   { to: "/favorites", labelKey: "nav.favorites", Icon: StarIcon },
   { to: "/settings", labelKey: "nav.settings", Icon: SettingsIcon },
 ];
@@ -64,7 +65,7 @@ export default function Layout() {
 
       {/* Bottom navigation on phones */}
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.06] bg-ink-950/90 backdrop-blur-md md:hidden">
-        <div className="grid grid-cols-3">
+        <div className="grid" style={{ gridTemplateColumns: `repeat(${LINKS.length}, minmax(0, 1fr))` }}>
           {LINKS.map((link) => (
             <NavLink
               key={link.to}

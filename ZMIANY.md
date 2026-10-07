@@ -422,3 +422,18 @@ W `locales/pl/index.js` są też format liczb i dat (`pl-PL`) oraz symbol waluty
 - **Strefa czasowa:** daty z formularzy są zapisywane jako czas lokalny. Do porównania ze świecami (UTC) służy nowe ustawienie `USER_TIMEZONE` w `server/.env` (domyślnie `Europe/Warsaw`). Doszedł pakiet `tzdata` (Windows nie ma wbudowanej bazy stref).
 - API: `GET /api/positions/{id}/timing` zwraca `duration_seconds`, `below_seconds`, `above_seconds`, `unknown_seconds`, `below_pct`, `interval` i `source`.
 - Testy: `server/tests/test_position_timing.py`.
+
+---
+
+## Etap 12: analiza dziennika (strona „Dziennik”)
+
+- Nowa strona **Dziennik** w menu, z filtrem portfela (wszystkie albo jeden).
+- Analizowane są tylko **zamknięte pozycje**, bo ich wynik jest ostateczny. Liczba otwartych pozycji jest podana w nagłówku.
+- **Podsumowanie:** liczba transakcji, win rate, łączny i średni wynik (USDT i %), średni czas trwania, średni czas pod ceną wejścia.
+- **Zyskowne kontra stratne:** porównanie średniego wyniku, czasu trwania i czasu pod wejściem. Transakcja na zero liczy się do „stratnych / na zero”.
+- **Tagi:** dla każdego tagu liczba transakcji, win rate, średni wynik (USDT i %), suma, średni czas i % czasu pod wejściem. Transakcja z kilkoma tagami liczy się do każdego z nich. Osobny wiersz „(bez tagów)”.
+- **Słowa z powodów wejścia:** deterministyczna analiza tekstu, bez AI. Słowa mają co najmniej 3 litery, popularne słowa („się”, „cena”, „the”…) są pomijane, a w tabeli zostają tylko słowa użyte w co najmniej 2 transakcjach.
+- **Lista transakcji:** wynik, czas, % pod wejściem, tagi, powód wejścia i powody wyjścia.
+- Czasy pochodzą z etapu 11 (świece). Pierwsze otwarcie może chwilę potrwać, bo świece są pobierane dla każdej zamkniętej pozycji. Potem wyniki są w pamięci serwera.
+- API: `GET /api/journal/stats?portfolio_id=&timing=true|false`.
+- Testy: `server/tests/test_journal_stats.py`.
