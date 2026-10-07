@@ -12,7 +12,7 @@ def create_portfolio(client, headers, name="Główny"):
 
 def add_position(client, headers, portfolio_id, **overrides):
     body = {"symbol": "btc", "buy_price": "50000", "quantity": "1", "fee_coin": "0.001",
-            "bought_at": "2026-09-01", "note": "test"} | overrides
+            "bought_at": "2026-09-01", "entry_reason": "test"} | overrides
     response = client.post(f"/api/portfolios/{portfolio_id}/positions", json=body, headers=headers)
     assert response.status_code == 201, response.text
     return response.json()
@@ -47,7 +47,7 @@ def test_position_view_and_summary(client):
     assert btc["price"]["price"] == "60000" and btc["price"]["source"] == "okx"
     assert btc["open_quantity"] == "0.999"
     assert btc["positions"][0]["unrealized_pnl"] == "9940.00000000"
-    assert btc["positions"][0]["note"] == "test"
+    assert btc["positions"][0]["entry_reason"] == "test"
 
     spx = coins["SPX"]
     assert spx["price"]["source"] == "bybit"

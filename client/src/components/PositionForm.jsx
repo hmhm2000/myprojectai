@@ -19,7 +19,11 @@ export default function PositionForm({ position = null, defaultSymbol = "", onSu
   const [quantity, setQuantity] = useState(position?.quantity ?? "");
   const [fee, setFee] = useState(position && toNumber(position.fee_coin) !== 0 ? position.fee_coin : "");
   const [boughtAt, setBoughtAt] = useState(toLocalInput(position?.bought_at ?? new Date()));
-  const [note, setNote] = useState(position?.note ?? "");
+  const [entryReason, setEntryReason] = useState(position?.entry_reason ?? "");
+  const [tags, setTags] = useState((position?.tags ?? []).join(", "));
+  const [plan, setPlan] = useState(position?.plan ?? "");
+  const [targetPrice, setTargetPrice] = useState(position?.target_price ?? "");
+  const [stopLoss, setStopLoss] = useState(position?.stop_loss ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -38,13 +42,20 @@ export default function PositionForm({ position = null, defaultSymbol = "", onSu
       quantity: parseAmount(quantity),
       fee_coin: parseAmount(fee || "0"),
       bought_at: boughtAt,
-      note: note.trim() || null,
+      entry_reason: entryReason.trim() || null,
+      tags: tags.split(/[,;\s]+/).filter(Boolean),
+      plan: plan.trim() || null,
+      target_price: targetPrice.trim() ? parseAmount(targetPrice) : null,
+      stop_loss: stopLoss.trim() ? parseAmount(stopLoss) : null,
     };
     if (!body.symbol) return setError(t("position.errors.chooseCoin"));
     if (!body.buy_price || toNumber(body.buy_price) <= 0) return setError(t("position.errors.invalidPrice"));
     if (!body.quantity || toNumber(body.quantity) <= 0) return setError(t("position.errors.invalidQuantity"));
     if (body.fee_coin === null) return setError(t("position.errors.invalidFee"));
     if (toNumber(body.fee_coin) >= toNumber(body.quantity)) return setError(t("position.errors.feeTooHigh"));
+    if ((targetPrice.trim() && !body.target_price) || (stopLoss.trim() && !body.stop_loss)) {
+      return setError(t("position.errors.invalidTargets"));
+    }
 
     setBusy(true);
     setError(null);
@@ -94,8 +105,25 @@ export default function PositionForm({ position = null, defaultSymbol = "", onSu
           </Field>
         </div>
 
-        <Field label={t("common.note")} htmlFor="pf-note">
-          <textarea id="pf-note" className="w-full" rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />
+        {/* Trade journal */}
+        <Field label={t("position.journal.entryReason")} htmlFor="pf-reason">
+          <textarea id="pf-reason" className="w-full" rows={3} maxLength={4000} value={entryReason}
+            placeholder={t("position.journal.entryReasonPlaceholder")} onChange={(e) => setEntryReason(e.target.value)} />
+        </Field>
+        <Field label={t("position.journal.tags")} htmlFor="pf-tags" hint={t("position.journal.tagsHint")}>
+          <input id="pf-tags" className="w-full uppercase placeholder:normal-case" value={tags}
+            placeholder="RSI, SUPPORT, BB" onChange={(e) => setTags(e.target.value)} />
+        </Field>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label={t("position.journal.targetPrice", { currency })} htmlFor="pf-tp">
+            <DecimalInput id="pf-tp" value={targetPrice} onChange={setTargetPrice} placeholder="—" />
+          </Field>
+          <Field label={t("position.journal.stopLoss", { currency })} htmlFor="pf-sl">
+            <DecimalInput id="pf-sl" value={stopLoss} onChange={setStopLoss} placeholder="—" />
+          </Field>
+        </div>
+        <Field label={t("position.journal.plan")} htmlFor="pf-plan">
+          <textarea id="pf-plan" className="w-full" rows={2} maxLength={4000} value={plan} onChange={(e) => setPlan(e.target.value)} />
         </Field>
 
         <div className="grid grid-cols-3 gap-2 rounded-xl border border-white/[0.06] bg-ink-800/60 p-3 text-xs">

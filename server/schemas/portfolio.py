@@ -9,6 +9,8 @@ from schemas.common import Amount
 
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)]
 Note = Optional[Annotated[str, StringConstraints(strip_whitespace=True, max_length=500)]]
+JournalText = Optional[Annotated[str, StringConstraints(strip_whitespace=True, max_length=4000)]]
+OptionalPrice = Optional[Annotated[Decimal, Field(gt=0, max_digits=38, decimal_places=18)]]
 PositiveAmount = Annotated[Decimal, Field(gt=0, max_digits=38, decimal_places=18)]
 NonNegativeAmount = Annotated[Decimal, Field(ge=0, max_digits=38, decimal_places=18)]
 
@@ -23,6 +25,25 @@ def normalize_symbol(value: str) -> str:
     return symbol
 
 
+MAX_TAGS = 20
+
+
+def normalize_tags(value: list[str]) -> list[str]:
+    """Trim, uppercase and de-duplicate tags (order kept); letters, digits, "_" and "-" only."""
+    result: list[str] = []
+    for raw in value or []:
+        tag = raw.strip().upper().replace(" ", "_")
+        if not tag:
+            continue
+        if len(tag) > 30 or not all(ch.isalnum() or ch in "_-" for ch in tag) or not tag.isascii():
+            raise PydanticCustomError("invalid_tag", "Tags may contain only letters, digits, '_' and '-'")
+        if tag not in result:
+            result.append(tag)
+    if len(result) > MAX_TAGS:
+        raise PydanticCustomError("too_many_tags", "Too many tags")
+    return result
+
+
 # ------------------------------------------------------------------ input
 
 class PortfolioIn(BaseModel):
@@ -35,9 +56,15 @@ class PositionIn(BaseModel):
     quantity: PositiveAmount
     fee_coin: NonNegativeAmount = Decimal(0)
     bought_at: datetime
-    note: Note = None
+    # Trade journal (all optional)
+    entry_reason: JournalText = None
+    tags: list[str] = Field(default_factory=list)
+    plan: JournalText = None
+    target_price: OptionalPrice = None
+    stop_loss: OptionalPrice = None
 
     _symbol = field_validator("symbol")(normalize_symbol)
+    _tags = field_validator("tags")(normalize_tags)
 
     @model_validator(mode="after")
     def fee_lower_than_quantity(self):
@@ -57,7 +84,7 @@ class SaleIn(BaseModel):
     price: PositiveAmount
     fee_quote: NonNegativeAmount = Decimal(0)   # total fee for the whole sale (USDT)
     sold_at: datetime
-    note: Note = None
+    exit_reason: JournalText = None   # trade journal: why I sold
     allocations: list[SaleAllocationIn] = Field(min_length=1, max_length=100)
 
     @model_validator(mode="after")
@@ -85,7 +112,7 @@ class SaleOut(BaseModel):
     quantity: Amount
     fee_quote: Amount
     sold_at: datetime
-    note: Optional[str]
+    exit_reason: Optional[str]
 
 
 class PositionOut(BaseModel):
@@ -95,7 +122,11 @@ class PositionOut(BaseModel):
     quantity: Amount
     fee_coin: Amount
     bought_at: datetime
-    note: Optional[str]
+    entry_reason: Optional[str]
+    tags: list[str]
+    plan: Optional[str]
+    target_price: Optional[Amount]
+    stop_loss: Optional[Amount]
     sort_order: int
     sales: list[SaleOut]
 

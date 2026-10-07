@@ -47,6 +47,8 @@ export default {
     fee_not_below_quantity: "Opłata musi być mniejsza niż kupiona ilość",
     invalid_symbol: "Symbol coina: same litery i cyfry, np. BTC",
     duplicate_position: "Każda pozycja może wystąpić w sprzedaży tylko raz",
+    invalid_tag: "Tagi mogą zawierać tylko litery, cyfry, „_” i „-”",
+    too_many_tags: "Za dużo tagów (maks. 20)",
     greater_than: "Wartość musi być większa od zera",
     greater_than_equal: "Wartość nie może być ujemna",
     string_too_short: "Pole jest za krótkie",

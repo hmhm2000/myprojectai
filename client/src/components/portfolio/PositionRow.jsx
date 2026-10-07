@@ -13,6 +13,36 @@ function Stat({ label, children, className = "" }) {
   );
 }
 
+/** Trade journal of a position: entry reason, tags, TP/SL, plan. */
+function JournalDetails({ position }) {
+  const hasTargets = position.target_price || position.stop_loss;
+  if (!position.entry_reason && !position.tags.length && !hasTargets && !position.plan) return null;
+  return (
+    <div className="mt-2 space-y-1 pl-7 text-xs text-zinc-400">
+      {position.entry_reason && <p className="whitespace-pre-line text-zinc-300">{position.entry_reason}</p>}
+      {position.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {position.tags.map((tag) => (
+            <span key={tag} className="chip text-neon-violet">{tag}</span>
+          ))}
+        </div>
+      )}
+      {hasTargets && (
+        <p className="num">
+          {position.target_price && <span className="mr-3">TP {fmtUnitPrice(position.target_price)}</span>}
+          {position.stop_loss && <span>SL {fmtUnitPrice(position.stop_loss)}</span>}
+        </p>
+      )}
+      {position.plan && (
+        <p className="whitespace-pre-line">
+          <span className="text-zinc-500">{t("position.journal.plan")}: </span>
+          {position.plan}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** One purchase with its own result + its sales. */
 const PositionRow = forwardRef(function PositionRow(
   { position, symbol, saleGroups, dragging, handleProps, onSell, onEdit, onDelete, onEditSale, onDeleteSale },
@@ -78,16 +108,13 @@ const PositionRow = forwardRef(function PositionRow(
         </div>
       </div>
 
-      {(position.note || toNumber(position.fee_coin) > 0) && (
-        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 pl-7 text-xs text-zinc-500">
-          {toNumber(position.fee_coin) > 0 && (
-            <span>
-              {t("portfolio.position.fee")} <span className="num">{fmtQty(position.fee_coin)} {symbol}</span>
-            </span>
-          )}
-          {position.note && <span className="italic">{t("common.quoted", { text: position.note })}</span>}
+      {toNumber(position.fee_coin) > 0 && (
+        <div className="mt-2 pl-7 text-xs text-zinc-500">
+          {t("portfolio.position.fee")} <span className="num">{fmtQty(position.fee_coin)} {symbol}</span>
         </div>
       )}
+
+      <JournalDetails position={position} />
 
       {position.sales.length > 0 && (
         <ul className="mt-3 space-y-1.5 border-t border-white/[0.05] pl-7 pt-2">
@@ -107,7 +134,7 @@ const PositionRow = forwardRef(function PositionRow(
                     {t("portfolio.position.sharedSale", { amount: `${fmtQty(group.quantity)} ${symbol}`, count: group.parts.length })}
                   </span>
                 )}
-                {sale.note && <span className="italic">{t("common.quoted", { text: sale.note })}</span>}
+                {sale.exit_reason && <span className="italic">{t("common.quoted", { text: sale.exit_reason })}</span>}
                 <span className="ml-auto flex gap-1">
                   <button type="button" className="btn-icon h-7 w-7" title={t("portfolio.position.editSale")} onClick={() => onEditSale(sale.group_id)}>
                     <EditIcon size={14} />

@@ -94,7 +94,7 @@ def _write_sale_group(db: Session, portfolio: Portfolio, data: SaleIn, group_id:
             quantity=allocation.quantity,
             fee_quote=fee,
             sold_at=data.sold_at,
-            note=data.note,
+            exit_reason=data.exit_reason,
         ))
 
 

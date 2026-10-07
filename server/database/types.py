@@ -28,3 +28,16 @@ class DecimalString(TypeDecorator):
         if value is None:
             return None
         return Decimal(value)
+
+
+class TagList(TypeDecorator):
+    """List of tags stored as a comma-separated string ("RSI,SUPPORT"); always a list in Python."""
+
+    impl = String
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        return ",".join(value or [])
+
+    def process_result_value(self, value, dialect):
+        return [tag for tag in (value or "").split(",") if tag]

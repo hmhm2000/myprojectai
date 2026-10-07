@@ -18,6 +18,5 @@ export default {
   },
   loading: "Ładowanie…",
   name: "Nazwa",
-  note: "Notatka (opcjonalnie)",
   quoted: "„{{text}}”", // cytat, np. notatka przy pozycji
 };

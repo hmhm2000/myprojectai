@@ -17,6 +17,7 @@ export default {
   quantityFor: "Ilość z pozycji {{date}}",
   shortage: "Zaznaczone pozycje mają razem tylko {{amount}} {{symbol}}. Zaznacz kolejną pozycję albo zmniejsz ilość.",
   date: "Data sprzedaży",
+  exitReason: "Powód wyjścia (opcjonalnie)",
   preview: {
     selling: "Sprzedajesz",
     proceeds: "Przychód po opłacie",

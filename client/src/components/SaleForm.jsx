@@ -52,7 +52,7 @@ export default function SaleForm({ coin, preselectId = null, group = null, onSub
   const [price, setPrice] = useState(group?.price ?? coin.price?.price ?? "");
   const [fee, setFee] = useState(group && toNumber(group.fee_quote) !== 0 ? group.fee_quote : "");
   const [soldAt, setSoldAt] = useState(toLocalInput(group?.sold_at ?? new Date()));
-  const [note, setNote] = useState(group?.note ?? "");
+  const [exitReason, setExitReason] = useState(group?.exit_reason ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -114,7 +114,7 @@ export default function SaleForm({ coin, preselectId = null, group = null, onSub
       price: parseAmount(price),
       fee_quote: parseAmount(fee || "0"),
       sold_at: soldAt,
-      note: note.trim() || null,
+      exit_reason: exitReason.trim() || null,
       allocations,
     };
     if (allocations.length === 0) return setError(t("sale.errors.nothingSelected"));
@@ -216,7 +216,7 @@ export default function SaleForm({ coin, preselectId = null, group = null, onSub
                   <button type="button" onClick={() => toggle(position.id)} className="min-w-0 text-left">
                     <div className="text-sm text-zinc-200">
                       {date} · <span className="num">{fmtUnitPrice(position.buy_price)}</span>
-                      {position.note && <span className="ml-2 text-xs italic text-zinc-500">{t("common.quoted", { text: position.note })}</span>}
+                      {position.entry_reason && <span className="ml-2 text-xs italic text-zinc-500">{t("common.quoted", { text: position.entry_reason })}</span>}
                     </div>
                     <div className="num text-xs text-zinc-500">
                       {t("sale.available", { amount: fmtQty(available[position.id]) })} · {t("sale.now")}{" "}
@@ -256,8 +256,8 @@ export default function SaleForm({ coin, preselectId = null, group = null, onSub
             <input id="sf-date" type="datetime-local" className="w-full" value={soldAt}
               onChange={(e) => setSoldAt(e.target.value)} required />
           </Field>
-          <Field label={t("common.note")} htmlFor="sf-note">
-            <input id="sf-note" className="w-full" maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />
+          <Field label={t("sale.exitReason")} htmlFor="sf-reason">
+            <input id="sf-reason" className="w-full" maxLength={4000} value={exitReason} onChange={(e) => setExitReason(e.target.value)} />
           </Field>
         </div>
 

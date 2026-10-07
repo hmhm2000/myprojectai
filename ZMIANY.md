@@ -392,3 +392,17 @@ W `locales/pl/index.js` są też format liczb i dat (`pl-PL`) oraz symbol waluty
 - przeglądarka: cały scenariusz z etapu 7 (16 sprawdzeń) na wersji z i18n, do tego polski błąd logowania z kodu, polski błąd z backendu z parametrami („Ilość po opłacie nie może być mniejsza niż już sprzedana (0,04 BTC)”), okna potwierdzeń z pogrubioną nazwą i zero ostrzeżeń o brakujących tłumaczeniach.
 
 **Gałąź:** `feature/i18n` jest założona na `feature/average-buy-price` (te same pliki). Najpierw scal PR z średnią ceną, potem ten. Jeśli otworzysz PR z `feature/i18n` do `master` od razu, będzie zawierał oba zestawy zmian.
+
+---
+
+## Etap 10: dziennik transakcji (Trade Journal)
+
+- **Zakup (BUY):**
+  - **powód wejścia** (zwykły tekst, najważniejsze pole);
+  - opcjonalnie **tagi** (wpisujesz po przecinku, np. `rsi, support bb`, i zamieniają się w `RSI`, `SUPPORT`, `BB`);
+  - **plan**, **TP** (target) i **SL** (stop loss).
+- **Sprzedaż (SELL):** **powód wyjścia**.
+- Dotychczasowe notatki nie zginęły: notatka zakupu stała się powodem wejścia, a notatka sprzedaży powodem wyjścia (migracja `d1a7f3b5c802`). Kopia bazy sprzed migracji: `server/db/database.pre-journal.bak`.
+- Pola są zapisane w istniejących tabelach `positions` i `sales`, bez osobnego systemu. Obliczenia FIFO i PnL się nie zmieniły.
+- API: pozycja ma pola `entry_reason`, `tags` (lista), `plan`, `target_price` i `stop_loss`, a sprzedaż ma `exit_reason`.
+- Testy: `server/tests/test_journal.py`.
