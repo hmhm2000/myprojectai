@@ -41,3 +41,6 @@ mcps/
 
 # Testy
 .pytest_cache/
+
+# Lokalna konfiguracja edytora (Continue)
+.continue/
