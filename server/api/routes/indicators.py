@@ -19,15 +19,26 @@ router = APIRouter(prefix="/api/indicators", tags=["indicators"], dependencies=[
 class ParamOut(BaseModel):
     name: str
     type: str
-    default: float | int | str
+    default: bool | int | float | str
     min: Optional[float] = None
     max: Optional[float] = None
+    label: str = ""
+    group: str = ""
 
 
 class OutputOut(BaseModel):
     name: str
     plot: str
     color: Optional[str] = None
+    color_below: Optional[str] = None
+    opacity: float = 1.0
+    width: int = 1
+    radius: float = 2.0
+    char: str = ""
+    palette: list[str] = []
+    between: list[str] = []
+    label: str = ""
+    alert: bool = True
 
 
 class IndicatorOut(BaseModel):
@@ -38,6 +49,7 @@ class IndicatorOut(BaseModel):
     params: list[ParamOut]
     outputs: list[OutputOut]
     levels: list[float]
+    summary: list[str] = []
 
 
 class IndicatorValuesOut(BaseModel):
@@ -52,7 +64,7 @@ class IndicatorValuesOut(BaseModel):
 def list_indicators():
     return [
         IndicatorOut(id=i.id, name=i.name, pane=i.pane, description=i.description, levels=i.levels,
-                     params=[ParamOut(**p.__dict__) for p in i.params],
+                     summary=list(i.summary), params=[ParamOut(**p.__dict__) for p in i.params],
                      outputs=[OutputOut(**o.__dict__) for o in i.outputs])
         for i in REGISTRY.values()
     ]

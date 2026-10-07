@@ -6,6 +6,7 @@ from typing import Optional
 
 import indicators  # noqa: F401  (loads built-in and custom indicators)
 from indicators.base import OHLCV, get_indicator, validate_params
+from indicators.context import DataContext
 from indicators.core import Series
 from services.intervals import Interval, parse
 
@@ -73,7 +74,7 @@ def compute_indicator(candle_service, indicator_id: str, raw_params: Optional[di
     max_candles = min(MAX_CANDLES, (end - fetch_start) // source_step + 2)
     series = candle_service.get_candles(symbol, source_interval, fetch_start, end, max_candles=max_candles)
 
-    data = OHLCV.from_candles(series.candles)
+    data = OHLCV.from_candles(series.candles, DataContext(candle_service, symbol, source_interval, now))
     outputs = indicator.compute(data, params)
 
     if source_interval == interval:

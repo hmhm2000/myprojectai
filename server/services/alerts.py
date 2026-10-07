@@ -27,6 +27,7 @@ from typing import Optional
 
 from core.errors import BadRequest
 from indicators.base import OHLCV, get_indicator, validate_params
+from indicators.context import DataContext
 from indicators.core import crossover, crossunder
 from models.alerts import Alert, AlertEvent
 from schemas.alerts import Condition
@@ -49,7 +50,7 @@ def validate_condition(condition: Condition) -> None:
         if side.type == "indicator":
             indicator = get_indicator(side.id)
             side.params = validate_params(indicator, side.params)
-            if side.output not in {o.name for o in indicator.outputs}:
+            if side.output not in {o.name for o in indicator.outputs if o.alert and o.plot != "band"}:
                 raise BadRequest("alerts.invalid_condition", f"Unknown output {side.output} of {side.id}",
                                  output=side.output)
 
@@ -105,7 +106,8 @@ def at_open(data: OHLCV, index: int) -> OHLCV:
     o = data.open[index]
     cut = index + 1
     return OHLCV(time=data.time[:cut], open=data.open[:cut], high=data.high[:index] + [o],
-                 low=data.low[:index] + [o], close=data.close[:index] + [o], volume=data.volume[:index] + [0.0])
+                 low=data.low[:index] + [o], close=data.close[:index] + [o], volume=data.volume[:index] + [0.0],
+                 context=data.context)
 
 
 def evaluation_point(data: OHLCV, interval: str, trigger: str, now: float) -> tuple[OHLCV, int]:
@@ -127,7 +129,7 @@ def load_data(candle_service, symbol: str, interval: str, warmup: int, now: floa
     step = parse(interval).seconds
     count = warmup + EXTRA_CANDLES
     series = candle_service.get_candles(symbol, interval, int(now) - count * step, int(now), max_candles=count + 2)
-    return OHLCV.from_candles(series.candles)
+    return OHLCV.from_candles(series.candles, DataContext(candle_service, symbol, parse(interval).name, now))
 
 
 def preview(alert_condition: Condition, symbol: str, interval: str, trigger: str,
