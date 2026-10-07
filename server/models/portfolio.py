@@ -4,7 +4,7 @@ from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from database.db import Base
-from database.types import DecimalString
+from database.types import DecimalString, TagList
 
 
 def utcnow() -> datetime:
@@ -38,7 +38,12 @@ class Position(Base):
     quantity = Column(DecimalString, nullable=False)     # bought quantity (before fee)
     fee_coin = Column(DecimalString, nullable=False, default=0)  # fee taken in coin
     bought_at = Column(DateTime, nullable=False)
-    note = Column(Text, nullable=True)
+    # Trade journal (entry)
+    entry_reason = Column(Text, nullable=True)            # why I bought - free text
+    tags = Column(TagList, nullable=False, default=list)  # optional tags, e.g. ["RSI", "SUPPORT"]
+    plan = Column(Text, nullable=True)
+    target_price = Column(DecimalString, nullable=True)
+    stop_loss = Column(DecimalString, nullable=True)
     sort_order = Column(Integer, nullable=False, default=0)  # order set by drag & drop
     created_at = Column(DateTime, nullable=False, default=utcnow)
 
@@ -66,7 +71,7 @@ class Sale(Base):
     quantity = Column(DecimalString, nullable=False)    # sold coin quantity
     fee_quote = Column(DecimalString, nullable=False, default=0)  # fee in quote currency (USDT)
     sold_at = Column(DateTime, nullable=False)
-    note = Column(Text, nullable=True)
+    exit_reason = Column(Text, nullable=True)  # trade journal: why I sold
     created_at = Column(DateTime, nullable=False, default=utcnow)
 
     position = relationship("Position", back_populates="sales")

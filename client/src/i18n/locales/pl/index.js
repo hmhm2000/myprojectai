@@ -4,11 +4,14 @@
 // Zasady:
 // - {{nazwa}} to miejsce na wartość wstawianą przez kod (nie tłumaczyć nazwy w nawiasach).
 // - Obiekty { one, few, many, other } to formy liczby mnogiej (1 pozycja, 2 pozycje, 5 pozycji).
+import alerts from "./alerts.js";
 import auth from "./auth.js";
+import chart from "./chart.js";
 import coins from "./coins.js";
 import common from "./common.js";
 import errors from "./errors.js";
 import favorites from "./favorites.js";
+import journal from "./journal.js";
 import nav from "./nav.js";
 import portfolio from "./portfolio.js";
 import position from "./position.js";
@@ -22,11 +25,14 @@ export default {
     localeTag: "pl-PL", // format liczb i dat
     currencySymbol: "$", // symbol przed kwotami w walucie kwotowania (USDT)
   },
+  alerts,
   auth,
+  chart,
   coins,
   common,
   errors,
   favorites,
+  journal,
   nav,
   portfolio,
   position,

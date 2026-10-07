@@ -1,6 +1,10 @@
-import { forwardRef } from "react";
+import { forwardRef, useState } from "react";
+import { errorMessage } from "../../api/client";
+import { portfoliosApi } from "../../api/endpoints";
 import { t } from "../../i18n";
-import { fmtDate, fmtDateTime, fmtMoney, fmtQty, fmtUnitPrice, toNumber } from "../../lib/format";
+import {
+  fmtDate, fmtDateTime, fmtDuration, fmtMoney, fmtPct, fmtQty, fmtUnitPrice, positionDurationSeconds, toNumber,
+} from "../../lib/format";
 import { EditIcon, GripIcon, SellIcon, TrashIcon } from "../icons";
 import { Pnl } from "../ui";
 
@@ -9,6 +13,76 @@ function Stat({ label, children, className = "" }) {
     <div className={className}>
       <div className="text-[10px] uppercase tracking-wider text-zinc-500 lg:hidden">{label}</div>
       <div className="num text-sm text-zinc-200">{children}</div>
+    </div>
+  );
+}
+
+/** Trade journal of a position: entry reason, tags, TP/SL, plan. */
+function JournalDetails({ position }) {
+  const hasTargets = position.target_price || position.stop_loss;
+  if (!position.entry_reason && !position.tags.length && !hasTargets && !position.plan) return null;
+  return (
+    <div className="mt-2 space-y-1 pl-7 text-xs text-zinc-400">
+      {position.entry_reason && <p className="whitespace-pre-line text-zinc-300">{position.entry_reason}</p>}
+      {position.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {position.tags.map((tag) => (
+            <span key={tag} className="chip text-neon-violet">{tag}</span>
+          ))}
+        </div>
+      )}
+      {hasTargets && (
+        <p className="num">
+          {position.target_price && <span className="mr-3">TP {fmtUnitPrice(position.target_price)}</span>}
+          {position.stop_loss && <span>SL {fmtUnitPrice(position.stop_loss)}</span>}
+        </p>
+      )}
+      {position.plan && (
+        <p className="whitespace-pre-line">
+          <span className="text-zinc-500">{t("position.journal.plan")}: </span>
+          {position.plan}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Position lifetime; time below/above the buy price is loaded on demand (needs exchange candles). */
+function TimingLine({ position }) {
+  const [timing, setTiming] = useState(null);
+  const [state, setState] = useState("idle"); // idle | loading | error
+  const [error, setError] = useState(null);
+
+  const load = async () => {
+    setState("loading");
+    try {
+      setTiming(await portfoliosApi.positionTiming(position.id));
+      setState("idle");
+    } catch (err) {
+      setError(errorMessage(err));
+      setState("error");
+    }
+  };
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 pl-7 text-xs text-zinc-500">
+      <span>
+        {t(position.is_closed ? "portfolio.timing.heldFor" : "portfolio.timing.openFor", {
+          duration: fmtDuration(positionDurationSeconds(position)),
+        })}
+      </span>
+      {timing ? (
+        <span className="num">
+          {t("portfolio.timing.below", { duration: fmtDuration(timing.below_seconds), pct: timing.below_pct === null ? "—" : fmtPct(timing.below_pct, { signed: false }) })}
+          {" · "}
+          {t("portfolio.timing.above", { duration: fmtDuration(timing.above_seconds) })}
+        </span>
+      ) : (
+        <button type="button" className="text-neon-green hover:underline disabled:opacity-50" onClick={load} disabled={state === "loading"}>
+          {state === "loading" ? t("common.loading") : t("portfolio.timing.load")}
+        </button>
+      )}
+      {state === "error" && <span className="text-loss">{error}</span>}
     </div>
   );
 }
@@ -78,16 +152,14 @@ const PositionRow = forwardRef(function PositionRow(
         </div>
       </div>
 
-      {(position.note || toNumber(position.fee_coin) > 0) && (
-        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 pl-7 text-xs text-zinc-500">
-          {toNumber(position.fee_coin) > 0 && (
-            <span>
-              {t("portfolio.position.fee")} <span className="num">{fmtQty(position.fee_coin)} {symbol}</span>
-            </span>
-          )}
-          {position.note && <span className="italic">{t("common.quoted", { text: position.note })}</span>}
+      {toNumber(position.fee_coin) > 0 && (
+        <div className="mt-2 pl-7 text-xs text-zinc-500">
+          {t("portfolio.position.fee")} <span className="num">{fmtQty(position.fee_coin)} {symbol}</span>
         </div>
       )}
+
+      <TimingLine position={position} />
+      <JournalDetails position={position} />
 
       {position.sales.length > 0 && (
         <ul className="mt-3 space-y-1.5 border-t border-white/[0.05] pl-7 pt-2">
@@ -107,7 +179,7 @@ const PositionRow = forwardRef(function PositionRow(
                     {t("portfolio.position.sharedSale", { amount: `${fmtQty(group.quantity)} ${symbol}`, count: group.parts.length })}
                   </span>
                 )}
-                {sale.note && <span className="italic">{t("common.quoted", { text: sale.note })}</span>}
+                {sale.exit_reason && <span className="italic">{t("common.quoted", { text: sale.exit_reason })}</span>}
                 <span className="ml-auto flex gap-1">
                   <button type="button" className="btn-icon h-7 w-7" title={t("portfolio.position.editSale")} onClick={() => onEditSale(sale.group_id)}>
                     <EditIcon size={14} />

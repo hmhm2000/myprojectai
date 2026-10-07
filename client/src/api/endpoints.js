@@ -34,6 +34,7 @@ export const portfoliosApi = {
   addPosition: (portfolioId, body) => data(api.post(`/api/portfolios/${portfolioId}/positions`, body)),
   updatePosition: (id, body) => data(api.put(`/api/positions/${id}`, body)),
   removePosition: (id) => data(api.delete(`/api/positions/${id}`)),
+  positionTiming: (id) => data(api.get(`/api/positions/${id}/timing`)),
 
   reorderPositions: (portfolioId, positionIds) =>
     data(api.put(`/api/portfolios/${portfolioId}/positions/order`, { position_ids: positionIds })),
@@ -42,6 +43,31 @@ export const portfoliosApi = {
   addSale: (portfolioId, body) => data(api.post(`/api/portfolios/${portfolioId}/sales`, body)),
   updateSale: (groupId, body) => data(api.put(`/api/sale-groups/${groupId}`, body)),
   removeSale: (groupId) => data(api.delete(`/api/sale-groups/${groupId}`)),
+};
+
+export const candlesApi = {
+  get: (symbol, interval, { limit = 500, before = null } = {}) =>
+    data(api.get("/api/candles", { params: { symbol, interval, limit, ...(before ? { before } : {}) } })),
+};
+
+export const alertsApi = {
+  list: () => data(api.get("/api/alerts")),
+  create: (body) => data(api.post("/api/alerts", body)),
+  update: (id, body) => data(api.patch(`/api/alerts/${id}`, body)),
+  remove: (id) => api.delete(`/api/alerts/${id}`),
+  check: (id) => data(api.get(`/api/alerts/${id}/check`)),
+  events: ({ unseenOnly = false } = {}) => data(api.get("/api/alerts/events", { params: { unseen_only: unseenOnly } })),
+  markSeen: (ids = null) => api.post("/api/alerts/events/seen", ids ? { ids } : {}),
+};
+
+export const indicatorsApi = {
+  list: () => data(api.get("/api/indicators")),
+  values: (id, { symbol, interval, start, end, params }) =>
+    data(api.get(`/api/indicators/${id}/values`, { params: { symbol, interval, start, end, params: JSON.stringify(params) } })),
+};
+
+export const journalApi = {
+  stats: (portfolioId = null) => data(api.get("/api/journal/stats", { params: portfolioId ? { portfolio_id: portfolioId } : {} })),
 };
 
 export const favoritesApi = {

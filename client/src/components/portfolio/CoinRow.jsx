@@ -1,10 +1,11 @@
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
 import { t } from "../../i18n";
 import { fmtMoney, fmtQty, fmtUnitPrice, toNumber } from "../../lib/format";
 import { SORT_MODES, sortPositions } from "../../lib/positionSort";
 import { collectSaleGroups } from "../../lib/saleGroups";
 import { sourceName } from "../../lib/sources";
-import { ChevronIcon, PlusIcon, SellIcon } from "../icons";
+import { ChartIcon, ChevronIcon, PlusIcon, SellIcon } from "../icons";
 import { Change24h, CoinBadge, Pnl } from "../ui";
 import PositionRow from "./PositionRow";
 import { useDragSort } from "./useDragSort";
@@ -172,6 +173,9 @@ export default function CoinRow({ coin, expanded, onToggle, actions, showClosed,
                   <SellIcon size={14} /> {t("portfolio.coin.sell", { symbol: coin.symbol })}
                 </button>
               )}
+              <Link to={`/chart?symbol=${coin.symbol}`} className="btn-ghost text-xs">
+                <ChartIcon size={14} /> {t("portfolio.coin.chart")}
+              </Link>
               <button type="button" className="btn-ghost text-xs" onClick={() => actions.addPosition(coin.symbol)}>
                 <PlusIcon size={14} /> {t("portfolio.coin.buy", { symbol: coin.symbol })}
               </button>

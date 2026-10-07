@@ -12,6 +12,7 @@ os.environ["SECRET_KEY"] = "test-secret"
 os.environ["ADMIN_USERNAME"] = "admin"
 os.environ["ADMIN_PASSWORD"] = "admin-password"
 os.environ["ALLOW_REGISTRATION"] = "false"
+os.environ["ALERT_CHECK_SECONDS"] = "0"   # no background alert checker in tests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -21,8 +22,11 @@ from database.db import Base, engine  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def fresh_db():
+    from services.position_timing import clear_cache
+
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
+    clear_cache()   # ids restart in every test - don't reuse cached timings
     yield
 
 

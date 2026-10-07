@@ -392,3 +392,136 @@ W `locales/pl/index.js` są też format liczb i dat (`pl-PL`) oraz symbol waluty
 - przeglądarka: cały scenariusz z etapu 7 (16 sprawdzeń) na wersji z i18n, do tego polski błąd logowania z kodu, polski błąd z backendu z parametrami („Ilość po opłacie nie może być mniejsza niż już sprzedana (0,04 BTC)”), okna potwierdzeń z pogrubioną nazwą i zero ostrzeżeń o brakujących tłumaczeniach.
 
 **Gałąź:** `feature/i18n` jest założona na `feature/average-buy-price` (te same pliki). Najpierw scal PR z średnią ceną, potem ten. Jeśli otworzysz PR z `feature/i18n` do `master` od razu, będzie zawierał oba zestawy zmian.
+
+---
+
+## Etap 10: dziennik transakcji (Trade Journal)
+
+- **Zakup (BUY):**
+  - **powód wejścia** (zwykły tekst, najważniejsze pole);
+  - opcjonalnie **tagi** (wpisujesz po przecinku, np. `rsi, support bb`, i zamieniają się w `RSI`, `SUPPORT`, `BB`);
+  - **plan**, **TP** (target) i **SL** (stop loss).
+- **Sprzedaż (SELL):** **powód wyjścia**.
+- Dotychczasowe notatki nie zginęły: notatka zakupu stała się powodem wejścia, a notatka sprzedaży powodem wyjścia (migracja `d1a7f3b5c802`). Kopia bazy sprzed migracji: `server/db/database.pre-journal.bak`.
+- Pola są zapisane w istniejących tabelach `positions` i `sales`, bez osobnego systemu. Obliczenia FIFO i PnL się nie zmieniły.
+- API: pozycja ma pola `entry_reason`, `tags` (lista), `plan`, `target_price` i `stop_loss`, a sprzedaż ma `exit_reason`.
+- Testy: `server/tests/test_journal.py`.
+
+---
+
+## Etap 11: czas trwania pozycji (pod / nad ceną wejścia)
+
+- Pod każdą pozycją widać **czas trwania**: „Otwarta od …” albo „Trwała …” (od zakupu do ostatniej sprzedaży). Liczy się w przeglądarce, bez zapytań.
+- Przycisk **„Czas pod / nad ceną wejścia”** pobiera świece z giełdy i pokazuje, ile czasu cena była poniżej, a ile powyżej ceny zakupu (z procentem).
+  - Częściowa sprzedaż nie kończy pozycji: liczy się do sprzedaży ostatniej sztuki albo do teraz.
+  - Każda świeca jest oceniana po cenie zamknięcia. Interwał dobiera się sam (od 1m do 1d), tak żeby wyszło najwyżej ok. 1000 świec, więc dokładność to mniej więcej jedna świeca.
+  - Nic nie jest zapisywane w bazie. Wyniki dla zamkniętych pozycji serwer pamięta, bo się nie zmieniają.
+- **Świece (OHLCV):** nowy wspólny serwis `server/services/candle_service.py`, z którego skorzysta też wykres.
+  - Źródło: Bybit, jeśli ma parę (1000 świec na zapytanie), w przeciwnym razie OKX. Przy awarii jednej giełdy serwis próbuje drugiej.
+  - Cache: zakresy sięgające „teraz” przez 30 s, historyczne trwale (w pamięci).
+- **Strefa czasowa:** daty z formularzy są zapisywane jako czas lokalny. Do porównania ze świecami (UTC) służy nowe ustawienie `USER_TIMEZONE` w `server/.env` (domyślnie `Europe/Warsaw`). Doszedł pakiet `tzdata` (Windows nie ma wbudowanej bazy stref).
+- API: `GET /api/positions/{id}/timing` zwraca `duration_seconds`, `below_seconds`, `above_seconds`, `unknown_seconds`, `below_pct`, `interval` i `source`.
+- Testy: `server/tests/test_position_timing.py`.
+
+---
+
+## Etap 12: analiza dziennika (strona „Dziennik”)
+
+- Nowa strona **Dziennik** w menu, z filtrem portfela (wszystkie albo jeden).
+- Analizowane są tylko **zamknięte pozycje**, bo ich wynik jest ostateczny. Liczba otwartych pozycji jest podana w nagłówku.
+- **Podsumowanie:** liczba transakcji, win rate, łączny i średni wynik (USDT i %), średni czas trwania, średni czas pod ceną wejścia.
+- **Zyskowne kontra stratne:** porównanie średniego wyniku, czasu trwania i czasu pod wejściem. Transakcja na zero liczy się do „stratnych / na zero”.
+- **Tagi:** dla każdego tagu liczba transakcji, win rate, średni wynik (USDT i %), suma, średni czas i % czasu pod wejściem. Transakcja z kilkoma tagami liczy się do każdego z nich. Osobny wiersz „(bez tagów)”.
+- **Słowa z powodów wejścia:** deterministyczna analiza tekstu, bez AI. Słowa mają co najmniej 3 litery, popularne słowa („się”, „cena”, „the”…) są pomijane, a w tabeli zostają tylko słowa użyte w co najmniej 2 transakcjach.
+- **Lista transakcji:** wynik, czas, % pod wejściem, tagi, powód wejścia i powody wyjścia.
+- Czasy pochodzą z etapu 11 (świece). Pierwsze otwarcie może chwilę potrwać, bo świece są pobierane dla każdej zamkniętej pozycji. Potem wyniki są w pamięci serwera.
+- API: `GET /api/journal/stats?portfolio_id=&timing=true|false`.
+- Testy: `server/tests/test_journal_stats.py`.
+
+---
+
+## Etap 13: wykres świecowy
+
+- Nowa strona **Wykres** w menu. Zbudowana na TradingView Lightweight Charts (biblioteka open source, bez konta TradingView).
+  - Świece i wolumen, przybliżanie (kółko myszy) i przesuwanie (przeciąganie).
+  - Interwały: 1m, 5m, 15m, 30m, 1h, 4h, 1D.
+  - Przewinięcie w lewo **doładowuje starszą historię**, a co 30 s (gdy karta jest widoczna) odświeżają się najnowsze świece.
+  - Oś czasu pokazuje czas lokalny.
+- Coin i interwał są w adresie, np. `/chart?symbol=SPX&interval=4h`, więc taki link można zapisać.
+- Dane pochodzą z tego samego serwisu świec co etap 11 (Bybit albo OKX, z cache), bez drugiego systemu pobierania cen. Pod wykresem widać, z której giełdy są świece.
+- API: `GET /api/candles?symbol=BTC&interval=1h&limit=500&before=<unix>`. Każda świeca ma pole `closed`: `false` oznacza ostatnią, jeszcze trwającą świecę. Przyda się do wskaźników i alertów (potwierdzanie świec).
+- Strona wykresu ładuje się osobno, tylko gdy ją otworzysz, więc reszta aplikacji się nie spowalnia.
+- Testy: `server/tests/test_candles_api.py`.
+
+---
+
+## Etap 14: transakcje z dziennika na wykresie
+
+- Na wykresie są **strzałki BUY** (zielone, pod świecą) i **SELL** (czerwone, nad świecą), w miejscu świecy, w której była transakcja. Pokazują się też po doładowaniu starszej historii.
+- **Kliknięcie strzałki** (albo wiersza na liście pod wykresem) otwiera wpis z dziennika:
+  - **BUY:** cena, ilość, data, portfel, aktualny wynik pozycji, powód wejścia, tagi, TP/SL i plan;
+  - **SELL:** cena, ilość, powód wyjścia i z których zakupów była sprzedaż.
+- Pod wykresem jest **lista Twoich transakcji** na danym coinie. Kliknięcie wiersza przewija wykres do tej transakcji, o ile mieści się w doładowanej historii.
+- W portfelu przy każdym coinie (po rozwinięciu) jest przycisk **Wykres**, który otwiera wykres tego coina.
+- Backend się nie zmienił: transakcje pochodzą z istniejącego API portfeli.
+
+---
+
+## Etap 15: system wskaźników (SMA, EMA, RSI, MACD, Bollinger Bands, Stochastic)
+
+**Gdzie się liczą:** na serwerze (Python), w jednej implementacji, którą współdzielą wykres, alerty i przyszła analiza. Wykres tylko rysuje wyniki. Twoje wskaźniki z Pine Script też będą tłumaczone na Pythona (decyzja z pytania przed tym etapem).
+
+- `server/indicators/core.py`: podstawowe funkcje zgodne z semantyką Pine:
+  - `ta.sma`: `na`, dopóki okno nie jest pełne;
+  - `ta.ema` i `ta.rma`: start od SMA pierwszego pełnego okna, potem wzór rekurencyjny;
+  - `ta.stdev`: wariant „biased”, jak domyślnie w Pine;
+  - `highest` / `lowest`, `change`, `crossover` / `crossunder`.
+- `server/indicators/builtin.py`: wbudowane wskaźniki, zdefiniowane jak w TradingView:
+  - SMA, EMA;
+  - RSI (rma zysków i strat; same zyski dają 100, same straty 0);
+  - MACD (12/26/9, sygnał to EMA);
+  - Bollinger Bands (20, 2);
+  - Stochastic (14/1/3).
+- **Rozgrzewka:** wskaźnik pobiera dodatkowe świece przed pierwszą wyświetlaną, żeby wynik nie zależał od tego, gdzie zaczyna się historia. RSI potrzebuje ok. 10× okres, bo jego wygładzanie wygasa wolno. Test pilnuje, żeby różnica była poniżej 0,01%.
+- **Nowy wskaźnik** to nowy plik w `server/indicators/custom/` z wywołaniem `register(...)`. Plik ładuje się automatycznie, a wskaźnik pojawia się w API i na liście na wykresie.
+- **API:**
+  - `GET /api/indicators`: lista wskaźników z parametrami, wyjściami i poziomami;
+  - `GET /api/indicators/{id}/values?symbol=&interval=&start=&end=&params={"length":14}`: wartości dla świec z zakresu, `null` = `na`. Pole `closed` oznacza, czy świeca jest już zamknięta.
+- **Na wykresie:** przycisk „+ Wskaźnik” pozwala wybrać wskaźnik i ustawić parametry.
+  - SMA, EMA i BB rysują się na cenie, a RSI, MACD i Stochastic w osobnych panelach pod spodem (z liniami 30/70, 20/80, 0).
+  - Lista aktywnych wskaźników zapamiętuje się w przeglądarce.
+  - Przy doładowaniu starszej historii pobiera się tylko brakujący kawałek wskaźnika, a przy odświeżaniu tylko kilka ostatnich świec.
+- Testy: `server/tests/test_indicators.py`, z wartościami policzonymi ręcznie z definicji Pine, przypadkami brzegowymi i zbieżnością rozgrzewki.
+
+---
+
+## Etap 16: alerty
+
+- Nowa strona **Alerty** w menu, z licznikiem nieprzeczytanych wyzwoleń.
+- **Warunek** ma postać „lewa strona, operator, prawa strona”.
+  - Każda strona może być **ceną**, **liczbą** albo **wskaźnikiem** (wybierasz wskaźnik, parametry i wyjście, np. dolną wstęgę BB albo sygnał MACD).
+  - Operatory: większe, mniejsze, większe lub równe, mniejsze lub równe, równe, **przecina w górę**, **przecina w dół** (jak `ta.crossover` / `ta.crossunder`).
+  - Przykłady: `BTC Cena > 110000`, `BTC RSI(14) < 30`, `BTC Cena < BB(20, 2) dolna`, `MACD przecina w górę sygnał`.
+- **Sprawdzanie:** serwer sprawdza alerty raz na minutę (`ALERT_CHECK_SECONDS` w `server/.env`, `0` wyłącza), także gdy aplikacja jest zamknięta. Używa **tej samej logiki wskaźników** co wykres (`server/indicators`), bez osobnych obliczeń.
+  - Domyślnie liczy na **zamkniętej świecy** (potwierdzone wartości). Można to wyłączyć i liczyć na bieżącej świecy, czyli na aktualnej cenie.
+  - Alert wyzwala się, gdy warunek **zaczyna** być spełniony, więc nie spamuje co minutę, kiedy dalej trwa.
+  - **Jednorazowy:** po wyzwoleniu sam się wyłącza.
+  - **Powtarzalny:** wyzwala się ponownie, gdy warunek najpierw przestanie, a potem znów zacznie być spełniony.
+- **Sprawdź teraz** pokazuje bieżące wartości obu stron warunku, np. „RSI(14): 47,81 · 30 → niespełniony”, bez zmieniania alertu.
+- **Powiadomienia:**
+  - historia wyzwoleń na stronie (z wartościami i ceną);
+  - licznik w menu;
+  - powiadomienie systemowe przeglądarki, gdy aplikacja jest otwarta (także w tle). Pozwolenie włączasz przyciskiem na stronie Alerty.
+- **API:** `GET/POST /api/alerts`, `PATCH/DELETE /api/alerts/{id}`, `GET /api/alerts/{id}/check`, `GET /api/alerts/events`, `POST /api/alerts/events/seen`.
+- Migracja `e3b9c7d1f4a6` (tabele `alerts`, `alert_events`) jest już zastosowana w Twojej bazie. Kopia sprzed migracji: `server/db/database.pre-alerts.bak`.
+- Testy: `server/tests/test_alerts.py`. Cały zestaw backendu: 68 testów.
+
+---
+
+## Etap 6 (własne wskaźniki z Pine Script): czeka na Twój kod
+
+Infrastruktura jest gotowa. Gdy wkleisz kod konkretnego wskaźnika Pine:
+1. przeanalizuję tylko ten wskaźnik (parametry, smoothing, lookback, wartości startowe, `na`, offsety, crossover, timeframe, potwierdzanie świec);
+2. przetłumaczę logikę na Pythona, w pliku `server/indicators/custom/<nazwa>.py`, korzystając z prymitywów zgodnych z Pine (`ta.sma`, `ta.ema`, `ta.rma`, `ta.stdev`, crossover…);
+3. wskaźnik od razu pojawi się na wykresie i w alertach. Sygnały BUY/SELL będą wyjściem typu `signal` (1 / −1), więc alert „MyIndicator = BUY” to warunek `wyjście == 1`;
+4. dodam testy tej implementacji, a jeśli podasz wartości z TradingView dla kilku świec (np. z okna danych), porównam wynik liczbowo.

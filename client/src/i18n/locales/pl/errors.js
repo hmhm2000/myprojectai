@@ -37,6 +37,11 @@ export default {
       coin_exists: "{{symbol}} już jest na tej liście",
       coin_not_found: "Tego coina nie ma na liście",
     },
+    candles: {
+      symbol_not_found: "Brak świec dla {{symbol}} na OKX/Bybit",
+      invalid_interval: "Nieobsługiwany interwał: {{interval}}",
+      unavailable: "Nie udało się pobrać świec z giełdy",
+    },
     prices: {
       refresh_too_soon: "Odczekaj {{retry_after}} s przed kolejnym odświeżeniem",
     },
@@ -47,6 +52,8 @@ export default {
     fee_not_below_quantity: "Opłata musi być mniejsza niż kupiona ilość",
     invalid_symbol: "Symbol coina: same litery i cyfry, np. BTC",
     duplicate_position: "Każda pozycja może wystąpić w sprzedaży tylko raz",
+    invalid_tag: "Tagi mogą zawierać tylko litery, cyfry, „_” i „-”",
+    too_many_tags: "Za dużo tagów (maks. 20)",
     greater_than: "Wartość musi być większa od zera",
     greater_than_equal: "Wartość nie może być ujemna",
     string_too_short: "Pole jest za krótkie",

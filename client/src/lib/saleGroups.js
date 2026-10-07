@@ -13,7 +13,7 @@ export function collectSaleGroups(coin) {
           group_id: sale.group_id,
           price: sale.price,
           sold_at: sale.sold_at,
-          note: sale.note,
+          exit_reason: sale.exit_reason,
           parts: [],
         });
       }

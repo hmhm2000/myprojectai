@@ -116,6 +116,17 @@ class PriceService:
         self._refresh(force=True)
         return self._build_snapshot()
 
+    def sources_for(self, symbol: str) -> list[str]:
+        """Names of the providers that list the symbol (in priority order), based on the cached tickers."""
+        if self._sources_to_refresh(force=False):
+            self._refresh(force=False)
+        with self._state_lock:
+            return [p.name for p in self._providers if symbol in self._state[p.name].tickers]
+
+    @property
+    def quote_currency(self) -> str:
+        return self._quote
+
     def warm_up_in_background(self) -> None:
         """First fetch on server start, without blocking the startup."""
         threading.Thread(target=self._safe_initial_refresh, name="price-warmup", daemon=True).start()

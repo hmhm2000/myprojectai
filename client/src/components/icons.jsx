@@ -27,6 +27,25 @@ export const WalletIcon = icon(
     <circle cx="16" cy="14" r="1.2" />
   </>,
 );
+export const BellIcon = icon(
+  <>
+    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+    <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+  </>,
+);
+export const ChartIcon = icon(
+  <>
+    <path d="M8 4v4M8 16v4M16 6v3M16 17v3" />
+    <rect x="6" y="8" width="4" height="8" rx="1" />
+    <rect x="14" y="9" width="4" height="8" rx="1" />
+  </>,
+);
+export const BookIcon = icon(
+  <>
+    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z" />
+    <path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5" />
+  </>,
+);
 export const StarIcon = icon(<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z" />);
 export const SettingsIcon = icon(
   <>

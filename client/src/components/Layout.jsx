@@ -1,10 +1,14 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../context/contexts";
 import { t } from "../i18n";
-import { LogoutIcon, SettingsIcon, StarIcon, WalletIcon } from "./icons";
+import { BellIcon, BookIcon, ChartIcon, LogoutIcon, SettingsIcon, StarIcon, WalletIcon } from "./icons";
+import { useAlertWatcher } from "./useAlertWatcher";
 
 const LINKS = [
   { to: "/portfolios", labelKey: "nav.portfolios", Icon: WalletIcon },
+  { to: "/journal", labelKey: "nav.journal", Icon: BookIcon },
+  { to: "/chart", labelKey: "nav.chart", Icon: ChartIcon },
+  { to: "/alerts", labelKey: "nav.alerts", Icon: BellIcon, badge: true },
   { to: "/favorites", labelKey: "nav.favorites", Icon: StarIcon },
   { to: "/settings", labelKey: "nav.settings", Icon: SettingsIcon },
 ];
@@ -24,6 +28,10 @@ function Logo() {
 
 export default function Layout() {
   const { user, logout } = useAuth();
+  const unseenAlerts = useAlertWatcher(Boolean(user));
+  const badge = (link) => link.badge && unseenAlerts > 0 && (
+    <span className="rounded-full bg-neon-green px-1.5 text-[10px] font-bold leading-4 text-ink-950">{unseenAlerts}</span>
+  );
 
   return (
     <div className="min-h-screen pb-20 md:pb-0">
@@ -46,6 +54,7 @@ export default function Layout() {
               >
                 <link.Icon size={16} />
                 {t(link.labelKey)}
+                {badge(link)}
               </NavLink>
             ))}
           </nav>
@@ -64,7 +73,7 @@ export default function Layout() {
 
       {/* Bottom navigation on phones */}
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.06] bg-ink-950/90 backdrop-blur-md md:hidden">
-        <div className="grid grid-cols-3">
+        <div className="grid" style={{ gridTemplateColumns: `repeat(${LINKS.length}, minmax(0, 1fr))` }}>
           {LINKS.map((link) => (
             <NavLink
               key={link.to}
@@ -75,7 +84,10 @@ export default function Layout() {
                 }`
               }
             >
-              <link.Icon size={20} />
+              <span className="relative">
+                <link.Icon size={20} />
+                <span className="absolute -right-3 -top-1">{badge(link)}</span>
+              </span>
               {t(link.labelKey)}
             </NavLink>
           ))}

@@ -92,6 +92,7 @@ export default {
     allHidden: "Wszystkie pozycje są zamknięte i ukryte.",
     sell: "Sprzedaj {{symbol}}",
     buy: "Kup {{symbol}}",
+    chart: "Wykres",
     realizedFooter: "Zrealizowany na {{symbol}} (też z zamkniętych):",
   },
 
@@ -115,6 +116,15 @@ export default {
     cost: "Koszt",
     value: "Wartość",
     pnl: "Zysk / strata",
+  },
+
+  // Czas trwania pozycji i czas pod/nad ceną wejścia.
+  timing: {
+    openFor: "Otwarta od {{duration}}",
+    heldFor: "Trwała {{duration}}",
+    load: "Czas pod / nad ceną wejścia",
+    below: "pod wejściem {{duration}} ({{pct}})",
+    above: "nad wejściem {{duration}}",
   },
 
   // Jedna pozycja (zakup) i jej sprzedaże.
