@@ -3,13 +3,7 @@ import { t } from "../../i18n";
 import { EditIcon, EyeIcon, PlusIcon, TrashIcon } from "../icons";
 import IndicatorModal from "./IndicatorModal";
 import { intervalLabel } from "../../lib/intervals";
-
-/** "SMA 100", "BB 20, 2", "RSI 14 (hl2)" - the most important settings of an indicator. */
-function summary(def, params) {
-  const values = def.params.filter((p) => p.type !== "source").map((p) => params[p.name]);
-  const source = def.params.some((p) => p.type === "source") && params.source && params.source !== "close" ? ` (${params.source})` : "";
-  return `${def.name} ${values.join(", ")}${source}`;
-}
+import { summaryText as summary } from "../../lib/indicatorMeta";
 
 /**
  * Left-hand panel of the chart: one tile per saved indicator (settings, timeframe, edit / hide / delete)

@@ -1,6 +1,6 @@
-import { HistogramSeries, LineSeries } from "lightweight-charts";
 import { useCallback, useEffect, useRef } from "react";
 import { indicatorsApi } from "../../api/endpoints";
+import { createOutputSeries, drawOutputs, removeOutputSeries } from "./indicatorSeries";
 
 const TAIL_STEPS = 5; // on refresh only the newest candles are recomputed
 
@@ -13,27 +13,12 @@ const TAIL_STEPS = 5; // on refresh only the newest candles are recomputed
  * showing one indicator does not download the others again.
  */
 export function useIndicators(api, active, definitions, symbol, interval) {
-  const layers = useRef([]); // [{ uid, def, params, series: {output: ISeriesApi}, values: Map<output, Map<unix, value>> }]
+  const layers = useRef([]); // [{ uid, def, params, series: {output: { series, markers }}, values: Map<output, Map<unix, value>> }]
   const range = useRef(null); // { first, last } of the data already fetched
   const cache = useRef({ api: null, layers: new Map() }); // uid -> { values, first, last } for this chart
 
   const draw = useCallback((layer) => {
-    if (!api) return;
-    for (const output of layer.def.outputs) {
-      const values = layer.values.get(output.name);
-      const series = layer.series[output.name];
-      if (!values || !series) continue;
-      const data = [...values.entries()]
-        .sort((a, b) => a[0] - b[0])
-        .map(([unix, value]) => {
-          const point = { time: api.toChartTime(unix) };
-          if (value === null) return point; // whitespace = Pine's na
-          point.value = value;
-          if (output.plot === "histogram") point.color = value >= 0 ? "rgba(52,211,153,0.6)" : "rgba(248,113,113,0.6)";
-          return point;
-        });
-      series.setData(data);
-    }
+    if (api) drawOutputs(api.toChartTime, layer);
   }, [api]);
 
   const fetchInto = useCallback(async (layer, start, end) => {
@@ -64,28 +49,24 @@ export function useIndicators(api, active, definitions, symbol, interval) {
     const saved = cache.current.layers;
 
     let pane = 0;
+    const paneSize = [3]; // price pane 3 parts, an indicator pane 1 part (2 for busy ones like VuManChu)
     layers.current = active
       .map(({ uid, id, params, interval: ownInterval }) => {
         const def = definitions.find((d) => d.id === id);
         if (!def) return null;
         const paneIndex = def.pane === "overlay" ? 0 : ++pane;
-        const series = {};
-        def.outputs.forEach((output) => {
-          const options = { color: output.color ?? "#a1a1aa", lineWidth: 1, priceLineVisible: false, lastValueVisible: true };
-          series[output.name] = output.plot === "histogram"
-            ? api.chart.addSeries(HistogramSeries, { ...options, priceFormat: { type: "price", precision: 4, minMove: 0.0001 } }, paneIndex)
-            : api.chart.addSeries(LineSeries, options, paneIndex);
-        });
-        const firstSeries = series[def.outputs[0].name];
-        def.levels.forEach((price) => firstSeries.createPriceLine({ price, color: "rgba(161,161,170,0.4)", lineStyle: 2, lineWidth: 1, axisLabelVisible: false }));
+        if (paneIndex) paneSize[paneIndex] = def.outputs.length > 10 ? 2 : 1;
+        const series = createOutputSeries(api.chart, def, params, paneIndex);
+        const firstSeries = Object.values(series)[0]?.series;
+        def.levels.forEach((price) => firstSeries?.createPriceLine({ price, color: "rgba(161,161,170,0.4)", lineStyle: 2, lineWidth: 1, axisLabelVisible: false }));
         const known = saved.get(uid);
         return { uid, id, def, params, interval: ownInterval ?? null, series, values: known?.values ?? new Map(),
           first: known?.first ?? null, last: known?.last ?? null };
       })
       .filter(Boolean);
 
-    // Price pane 3 parts, each indicator pane 1 part (CandleChart grows with the number of panes).
-    api.chart.panes().forEach((p, i) => p.setStretchFactor(i === 0 ? 3 : 1));
+    // CandleChart grows with the number of panes.
+    api.chart.panes().forEach((p, i) => p.setStretchFactor(paneSize[i] ?? 1));
     const tailStart = bars[Math.max(0, bars.length - TAIL_STEPS)].unix;
     layers.current.forEach((layer) => {
       if (layer.first === null) {
@@ -101,9 +82,7 @@ export function useIndicators(api, active, definitions, symbol, interval) {
     return () => {
       for (const layer of layers.current) {
         saved.set(layer.uid, { values: layer.values, first: layer.first, last: layer.last });
-        for (const series of Object.values(layer.series)) {
-          try { api.chart.removeSeries(series); } catch { /* chart already removed */ }
-        }
+        removeOutputSeries(api.chart, layer.series);
       }
       layers.current = [];
     };
