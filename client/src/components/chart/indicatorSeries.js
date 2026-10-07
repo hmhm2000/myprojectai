@@ -1,6 +1,6 @@
 import { BaselineSeries, HistogramSeries, LineSeries, LineType, createSeriesMarkers } from "lightweight-charts";
 import { resolveColor } from "../../lib/indicatorMeta";
-import { BandSeries } from "./bandSeries";
+import { BackgroundSeries, BandSeries } from "./bandSeries";
 
 // How each output plot type (see server indicators/base.py Output) is drawn with Lightweight Charts.
 
@@ -23,6 +23,12 @@ export function createOutputSeries(chart, def, params, paneIndex) {
     switch (output.plot) {
       case "none":
         continue;
+      case "barcolor":
+        result[output.name] = { barcolor: true };   // colors the price candles (CandleChart.setBarColors)
+        continue;
+      case "background":
+        series = chart.addCustomSeries(new BackgroundSeries(), { color, priceLineVisible: false, lastValueVisible: false }, paneIndex);
+        break;
       case "histogram":
         series = chart.addSeries(HistogramSeries, { ...base, priceFormat: { type: "price", precision: 4, minMove: 0.0001 } }, paneIndex);
         break;
@@ -58,7 +64,8 @@ export function createOutputSeries(chart, def, params, paneIndex) {
 }
 
 /** Puts the fetched values of a layer ({ def, params, series, values }) on its series. */
-export function drawOutputs(toChartTime, layer) {
+export function drawOutputs(api, layer) {
+  const { toChartTime } = api;
   const { def, params, values } = layer;
   for (const output of def.outputs) {
     const target = layer.series[output.name];
@@ -70,6 +77,17 @@ export function drawOutputs(toChartTime, layer) {
       const index = colors?.get(unix);
       return index === null || index === undefined ? null : palette[index];
     };
+
+    if (output.plot === "barcolor") {
+      const shown = values.get(output.name);
+      const colors = new Map();
+      for (const [unix, value] of shown ?? []) {
+        const color = value === null ? null : colorAt(unix);
+        if (color) colors.set(unix, color);
+      }
+      api.setBarColors?.(colors.size ? colors : null);
+      continue;
+    }
 
     if (output.plot === "band") {
       const [upperName, lowerName] = output.between;
@@ -93,6 +111,7 @@ export function drawOutputs(toChartTime, layer) {
       const point = { time: toChartTime(unix) };
       const color = colorAt(unix);
       if (value === null || (color === null && output.plot === "points")) return point; // whitespace = Pine's na
+      if (output.plot === "background") return { ...point, fill: color ?? "" };
       point.value = value;
       if (color) point.color = color;
       else if (output.plot === "histogram" && !output.color) point.color = value >= 0 ? "rgba(52,211,153,0.6)" : "rgba(248,113,113,0.6)";
@@ -107,11 +126,15 @@ export function drawOutputs(toChartTime, layer) {
   }
 }
 
-export function removeOutputSeries(chart, seriesMap) {
-  for (const { series, markers } of Object.values(seriesMap)) {
+export function removeOutputSeries(api, seriesMap) {
+  for (const { series, markers, barcolor } of Object.values(seriesMap)) {
     try {
+      if (barcolor) {
+        api.setBarColors?.(null);
+        continue;
+      }
       markers?.detach();
-      chart.removeSeries(series);
+      api.chart.removeSeries(series);
     } catch {
       // chart already removed
     }

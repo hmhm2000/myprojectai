@@ -42,6 +42,11 @@ function ParamInput({ def, param, value, onChange, intervals, idPrefix }) {
     );
   } else if (param.type === "color") {
     input = <ColorInput id={id} value={value} onChange={onChange} />;
+  } else if (param.type === "symbol") {
+    input = (
+      <input id={id} className="w-full uppercase" value={value} maxLength={20} required pattern="[A-Za-z0-9]+"
+        onChange={(e) => onChange(e.target.value.toUpperCase())} />
+    );
   } else if (param.type === "timeframe") {
     input = (
       <select id={id} className="w-full" value={value} onChange={(e) => onChange(e.target.value)}>

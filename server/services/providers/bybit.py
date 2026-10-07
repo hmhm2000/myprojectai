@@ -37,12 +37,13 @@ BYBIT_PAGE = 1000  # kline returns at most 1000 rows per request
 
 
 def fetch_candles(symbol: str, quote: str, interval: str, start_ms: int, end_ms: int,
-                  max_candles: int, timeout: float) -> list[Candle]:
-    """Candles in [start_ms, end_ms], oldest first. Pages backwards from end_ms."""
+                  max_candles: int, timeout: float, market: str = "spot") -> list[Candle]:
+    """Candles in [start_ms, end_ms], oldest first. Pages backwards from end_ms.
+    market: "spot" or "perp" (USDT perpetual, category=linear)."""
     candles: dict[int, Candle] = {}
     cursor = end_ms
     while len(candles) < max_candles:
-        payload = get_json(CANDLES_URL, {"category": "spot", "symbol": f"{symbol}{quote}",
+        payload = get_json(CANDLES_URL, {"category": "linear" if market == "perp" else "spot", "symbol": f"{symbol}{quote}",
                                          "interval": BYBIT_INTERVALS[interval], "start": str(start_ms),
                                          "end": str(cursor), "limit": str(BYBIT_PAGE)}, timeout, "Bybit")
         if payload.get("retCode") != 0:

@@ -56,6 +56,24 @@ class OHLCV:
         except AppError:
             return None
 
+    def perp(self, symbol: Optional[str] = None) -> Optional["OHLCV"]:
+        """Candles of the coin's USDT perpetual (or of `symbol`) aligned with these candles; None if unavailable."""
+        if self.context is None or not self.time:
+            return None
+        try:
+            return self.context.perp(self, symbol or self.context.symbol)
+        except AppError:
+            return None
+
+    def open_interest(self, symbol: Optional[str] = None) -> Optional[Series]:
+        """Open interest (USDT perpetual) per candle - like TradingView's <SYMBOL>_OI close; None if unavailable."""
+        if self.context is None or not self.time:
+            return None
+        try:
+            return self.context.open_interest(self, symbol or self.context.symbol)
+        except AppError:
+            return None
+
     def source(self, name: str) -> list[float]:
         if name == "hl2":
             return [(h + l) / 2 for h, l in zip(self.high, self.low)]
@@ -70,6 +88,7 @@ class OHLCV:
 class Param:
     name: str
     type: str                      # "int" | "float" | "source" | "bool" | "color" (#rrggbb[aa]) | "timeframe" (e.g. "4h")
+                                   # | "symbol" (a coin, e.g. "ETH")
     default: Any
     min: Optional[float] = None
     max: Optional[float] = None
@@ -88,6 +107,8 @@ class Output:
       "char"   - a symbol (`char`) at the value (Pine plotchar with location.absolute),
       "band"   - fill between two other outputs (`between`) like Pine fill(),
       "signal" - 1 = BUY, -1 = SELL markers,
+      "background" - colors the whole pane behind candles where the value is 1 (Pine bgcolor),
+      "barcolor"   - colors the price candles (Pine barcolor), color from `palette`,
       "none"   - not drawn (helper series, alert conditions).
     Per-point colors: the indicator also returns "<name>:color" = index into `palette` (None = not drawn).
     """
@@ -180,6 +201,11 @@ def _coerce(param: Param, value: Any) -> Any:
         if not isinstance(value, str) or not COLOR.match(value):
             raise ValueError
         return value.lower()
+    if param.type == "symbol":
+        value = str(value).strip().upper()
+        if not re.match(r"^[A-Z0-9]{1,20}$", value):
+            raise ValueError
+        return value
     if param.type == "timeframe":
         from services.intervals import parse
 
