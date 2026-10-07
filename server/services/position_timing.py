@@ -105,6 +105,11 @@ _cache: dict[tuple, PositionTiming] = {}
 _cache_lock = threading.Lock()
 
 
+def clear_cache() -> None:
+    with _cache_lock:
+        _cache.clear()
+
+
 def _fingerprint(position) -> tuple:
     sales = tuple(sorted((s.id, str(s.quantity), s.sold_at.isoformat()) for s in position.sales))
     return (position.id, position.symbol, str(position.buy_price), str(position.quantity),

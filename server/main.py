@@ -5,11 +5,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 import models  # noqa: F401  (registers all models)
-from api.routes import candles, favorites, indicators, journal, portfolios, prices, users
+from api.routes import alerts, candles, favorites, indicators, journal, portfolios, prices, users
 from auth import ensure_admin_account, router as auth_router
 from config import settings
 from core.errors import AppError, app_error_handler
-from database.db import engine
+from database.db import SessionLocal, engine
+from services.alerts import AlertScheduler
+from services.candle_service import candle_service
 from services.price_service import price_service
 
 logging.basicConfig(
@@ -25,7 +27,10 @@ async def lifespan(app: FastAPI):
                 engine.url, "enabled" if settings.allow_registration else "disabled")
     ensure_admin_account()
     price_service.warm_up_in_background()
+    alert_scheduler = AlertScheduler(SessionLocal, candle_service, settings.alert_check_seconds)
+    alert_scheduler.start()
     yield
+    alert_scheduler.stop()
 
 
 app = FastAPI(title="Crypto Tracker API", lifespan=lifespan)
@@ -47,6 +52,7 @@ app.include_router(favorites.router)
 app.include_router(journal.router)
 app.include_router(candles.router)
 app.include_router(indicators.router)
+app.include_router(alerts.router)
 
 
 @app.get("/api/health", tags=["health"])

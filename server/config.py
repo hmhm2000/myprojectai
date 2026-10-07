@@ -50,6 +50,9 @@ class Settings:
     # Time zone of dates entered in the UI (bought_at/sold_at are stored as local time).
     user_timezone: str
 
+    # Alerts: seconds between checks (0 = checker disabled, e.g. in tests).
+    alert_check_seconds: int
+
 
 def _load() -> Settings:
     secret_key = os.getenv("SECRET_KEY", "")
@@ -73,6 +76,7 @@ def _load() -> Settings:
         price_error_backoff_seconds=_int("PRICE_ERROR_BACKOFF_SECONDS", 30),
         price_http_timeout_seconds=_int("PRICE_HTTP_TIMEOUT_SECONDS", 10),
         user_timezone=os.getenv("USER_TIMEZONE", "Europe/Warsaw").strip(),
+        alert_check_seconds=_int("ALERT_CHECK_SECONDS", 60),
     )
 
 
