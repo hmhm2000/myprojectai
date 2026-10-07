@@ -44,3 +44,18 @@ mcps/
 
 # Lokalna konfiguracja edytora (Continue)
 .continue/
+
+# Secrets and local configuration (keep only the .example templates)
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+
+# Local databases and their backups
+*.sqlite
+*.sqlite3
+*.db-journal
+
+# Personal working notes (kept locally, not part of the repository)
+ZMIANY.md
