@@ -8,8 +8,8 @@ function move(list, from, to) {
 }
 
 /**
- * Przeciąganie elementów listy za uchwyt (mysz i dotyk - Pointer Events).
- * Podczas przeciągania lista od razu pokazuje nową kolejność; po puszczeniu wywołuje onReorder(ids).
+ * Drag & drop of list items by a handle (mouse and touch - Pointer Events).
+ * While dragging, the list shows the new order live; on drop it calls onReorder(ids).
  */
 export function useDragSort(ids, onReorder) {
   const [drag, setDrag] = useState(null); // { id, from, to, mids }
@@ -28,7 +28,7 @@ export function useDragSort(ids, onReorder) {
       if (e.button !== 0) return;
       e.preventDefault();
       e.currentTarget.setPointerCapture(e.pointerId);
-      // Środki elementów zapamiętane na starcie - stabilne mimo przestawiania listy w trakcie.
+      // Item midpoints captured at the start - stable even though the list reorders while dragging.
       const mids = ids.map((itemId) => {
         const rect = elements.current.get(itemId)?.getBoundingClientRect();
         return rect ? rect.top + rect.height / 2 : 0;

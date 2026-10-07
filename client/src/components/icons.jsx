@@ -1,4 +1,4 @@
-// Proste ikony SVG (bez dodatkowych zależności).
+// Simple SVG icons (no extra dependencies).
 const base = {
   width: 18,
   height: 18,

@@ -344,3 +344,51 @@ Wszystkie 16 sprawdzeń przeszło, a w konsoli nie było błędów.
 - Testy: `server/tests/test_average_price.py` (średnia ważona, aktualizacja po sprzedaży częściowej i całkowitej, próg z opłatą, test przez API). Razem przechodzi 42 testy.
 
 **Repozytorium:** od tej zmiany pracuję na gałęziach w `hmhm2000/myprojectai`. Każda zmiana idzie na osobnej gałęzi `feature/...` z opisanymi commitami i trafia do `master` przez Pull Request. Przy okazji zdjąłem ze śledzenia `.continue/` (lokalna konfiguracja edytora, plik na dysku został) i dodałem go do `.gitignore`.
+
+---
+
+## Etap 9: teksty w osobnych plikach (i18n), kod po angielsku
+
+**Gdzie są teksty:** wszystkie teksty interfejsu leżą w `client/src/i18n/locales/pl/`, podzielone na pliki według obszaru:
+
+| Plik | Co zawiera |
+|---|---|
+| `common.js` | **nazwa aplikacji i logo**, wspólne przyciski (Anuluj, Zapisz…), „Ładowanie…” |
+| `nav.js` | menu: Portfele, Ulubione, Ustawienia, Wyloguj |
+| `auth.js` | logowanie i rejestracja |
+| `prices.js` | pasek cen, przycisk „Odśwież ceny”, nazwy giełd, błędy giełd |
+| `coins.js` | wyszukiwarka coinów |
+| `portfolio.js` | strona portfela: kafelki, kolumny, wiersz coina, pozycje, sortowanie, okna potwierdzeń |
+| `position.js` | formularz zakupu |
+| `sale.js` | formularz sprzedaży |
+| `favorites.js` | ulubione |
+| `settings.js` | ustawienia |
+| `errors.js` | komunikaty błędów, także tych z backendu |
+
+W `locales/pl/index.js` są też format liczb i dat (`pl-PL`) oraz symbol waluty (`$`).
+
+**Jak zmienić tekst:** znajdź go w odpowiednim pliku i podmień wartość w cudzysłowie.
+- `{{nazwa}}` to miejsce na wartość wstawianą przez kod, np. `"Sprzedaj {{symbol}}"`. Nawiasy z nazwą zostaw, przenosić je w zdaniu możesz.
+- Obiekty `{ one, few, many, other }` to formy liczby mnogiej (1 pozycja / 2 pozycje / 5 pozycji).
+
+**Zmiana nazwy strony:** w `common.js` zmień `app.name` (tytuł karty) oraz `app.logoMain` i `app.logoAccent` (logo).
+
+**Nowy język** (np. angielski):
+1. Skopiuj folder `locales/pl` jako `locales/en` i przetłumacz wartości.
+2. W `client/src/i18n/index.js` dopisz `import en from "./locales/en";` i dodaj `en` do `LOCALES`.
+3. W `client/.env` ustaw `VITE_LANGUAGE=en` i zrestartuj `npm run dev`.
+
+**Pilnowanie porządku:** `npm run check:i18n` (w `client/`) sprawdza, czy każdy klucz użyty w kodzie istnieje w plikach językowych i czy poza nimi nie ma polskich znaków, czyli tekstu wpisanego na sztywno.
+
+**Backend po angielsku:**
+- Logi, komentarze, docstringi i `.env.example` są po angielsku.
+- Błędy API mają format `{"detail": "...po angielsku...", "code": "sale.exceeds_available", "params": {...}}`. Frontend tłumaczy `code` przez `errors.api.<code>` w `errors.js`, a parametry wstawia sformatowane po polsku, np. datę i ilość. Nowy błąd w backendzie wymaga więc tylko dopisania jednej linijki w `errors.js`.
+- Błędy walidacji (422) mają własne typy (`fee_not_below_quantity`, `invalid_symbol`, `duplicate_position`), tłumaczone przez `errors.validation.<typ>`.
+- Błędy giełd mają kod w `sources[].error_code` (`connection_error`, `rate_limited`, …), tłumaczony w `prices.js`.
+
+**Testy:**
+- backend: 45 testów, w tym nowy `test_error_codes.py`, który pilnuje formatu błędów;
+- frontend: lint, build i `check:i18n` czyste;
+- przeglądarka: cały scenariusz z etapu 7 (16 sprawdzeń) na wersji z i18n, do tego polski błąd logowania z kodu, polski błąd z backendu z parametrami („Ilość po opłacie nie może być mniejsza niż już sprzedana (0,04 BTC)”), okna potwierdzeń z pogrubioną nazwą i zero ostrzeżeń o brakujących tłumaczeniach.
+
+**Gałąź:** `feature/i18n` jest założona na `feature/average-buy-price` (te same pliki). Najpierw scal PR z średnią ceną, potem ten. Jeśli otworzysz PR z `feature/i18n` do `master` od razu, będzie zawierał oba zestawy zmian.

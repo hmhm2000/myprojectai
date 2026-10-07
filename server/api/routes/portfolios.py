@@ -1,19 +1,20 @@
-"""Portfele, pozycje (zakupy) i sprzedaże.
+"""Portfolios, positions (purchases) and sales.
 
-Każda zmiana zwraca od razu przeliczony widok portfela, żeby frontend nie musiał dociągać danych.
+Every change returns the recalculated portfolio view, so the frontend doesn't need to refetch.
 
-Sprzedaż to "grupa": jedna transakcja (cena, data, łączna opłata) rozdzielona na jedną lub kilka
-pozycji tego samego coina. W bazie każda część to osobny wiersz Sale z tym samym group_id,
-dzięki czemu zysk dalej liczy się osobno dla każdej pozycji.
+A sale is a "group": one transaction (price, date, total fee) split across one or more
+positions of the same coin. Each part is stored as a separate Sale row with a shared group_id,
+so profit/loss is still calculated per position.
 """
 import uuid
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from auth import get_current_user
+from core.errors import BadRequest, NotFound
 from database.db import get_db
 from models.portfolio import Portfolio, Position, Sale
 from models.user import User
@@ -36,21 +37,21 @@ def _fmt(value: Decimal) -> str:
 def _get_portfolio(db: Session, portfolio_id: int, user: User) -> Portfolio:
     portfolio = db.get(Portfolio, portfolio_id)
     if portfolio is None or portfolio.user_id != user.id:
-        raise HTTPException(status_code=404, detail="Portfel nie istnieje")
+        raise NotFound("portfolio.not_found", "Portfolio not found")
     return portfolio
 
 
 def _get_position(db: Session, position_id: int, user: User) -> Position:
     position = db.get(Position, position_id)
     if position is None or position.portfolio.user_id != user.id:
-        raise HTTPException(status_code=404, detail="Pozycja nie istnieje")
+        raise NotFound("position.not_found", "Position not found")
     return position
 
 
 def _get_sale_group(db: Session, group_id: str, user: User) -> list[Sale]:
     sales = db.query(Sale).filter(Sale.group_id == group_id).all()
     if not sales or sales[0].position.portfolio.user_id != user.id:
-        raise HTTPException(status_code=404, detail="Sprzedaż nie istnieje")
+        raise NotFound("sale.not_found", "Sale not found")
     return sales
 
 
@@ -60,26 +61,29 @@ def _view(db: Session, portfolio: Portfolio) -> PortfolioOut:
 
 
 def _write_sale_group(db: Session, portfolio: Portfolio, data: SaleIn, group_id: str) -> None:
-    """Sprawdza i zapisuje sprzedaż rozdzieloną na pozycje (przy edycji stara wersja grupy jest pomijana)."""
+    """Validate and store a sale split across positions (when editing, the old version is ignored)."""
     positions = []
     for allocation in data.allocations:
         position = db.get(Position, allocation.position_id)
         if position is None or position.portfolio_id != portfolio.id:
-            raise HTTPException(status_code=404, detail="Pozycja nie istnieje w tym portfelu")
+            raise NotFound("sale.position_not_in_portfolio", "Position does not exist in this portfolio")
         positions.append(position)
 
     if len({p.symbol for p in positions}) > 1:
-        raise HTTPException(status_code=400, detail="Jedna sprzedaż może obejmować pozycje tylko jednego coina")
+        raise BadRequest("sale.mixed_coins", "One sale can only cover positions of a single coin")
 
     for position, allocation in zip(positions, data.allocations):
         available = held_quantity(position) - sold_quantity(position, exclude_group=group_id)
         if allocation.quantity > available:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Pozycja z {position.bought_at:%d.%m.%Y}: można sprzedać najwyżej {_fmt(available)} {position.symbol}",
+            raise BadRequest(
+                "sale.exceeds_available",
+                f"Position from {position.bought_at:%Y-%m-%d}: at most {_fmt(available)} {position.symbol} can be sold",
+                date=position.bought_at.isoformat(),
+                max=_fmt(available),
+                symbol=position.symbol,
             )
 
-    # Przy edycji: usuwamy starą wersję grupy i zapisujemy nową pod tym samym group_id.
+    # When editing: remove the old version of the group and store the new one under the same group_id.
     db.query(Sale).filter(Sale.group_id == group_id).delete(synchronize_session="fetch")
     fees = split_fee(data.fee_quote, [a.quantity for a in data.allocations])
     for allocation, fee in zip(data.allocations, fees):
@@ -94,7 +98,7 @@ def _write_sale_group(db: Session, portfolio: Portfolio, data: SaleIn, group_id:
         ))
 
 
-# ---------------------------------------------------------------- portfele
+# -------------------------------------------------------------- portfolios
 
 @router.get("/portfolios", response_model=list[PortfolioListItem])
 def list_portfolios(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -132,7 +136,7 @@ def delete_portfolio(portfolio_id: int, user: User = Depends(get_current_user), 
     return Response(status_code=204)
 
 
-# ----------------------------------------------------------------- pozycje
+# --------------------------------------------------------------- positions
 
 @router.post("/portfolios/{portfolio_id}/positions", response_model=PortfolioOut, status_code=201)
 def add_position(portfolio_id: int, data: PositionIn,
@@ -147,12 +151,12 @@ def add_position(portfolio_id: int, data: PositionIn,
 @router.put("/portfolios/{portfolio_id}/positions/order", response_model=PortfolioOut)
 def reorder_positions(portfolio_id: int, data: PositionOrderIn,
                       user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Zapisuje kolejność ustawioną przeciąganiem (np. pozycji jednego coina)."""
+    """Store the order set by drag & drop (e.g. positions of a single coin)."""
     portfolio = _get_portfolio(db, portfolio_id, user)
     by_id = {p.id: p for p in portfolio.positions}
     if len(set(data.position_ids)) != len(data.position_ids) or any(i not in by_id for i in data.position_ids):
-        raise HTTPException(status_code=400, detail="Nieprawidłowa lista pozycji")
-    # Pozycje dostają swoje dotychczasowe "miejsca", tylko w nowej kolejności - reszta portfela się nie zmienia.
+        raise BadRequest("position.invalid_order", "Invalid list of positions")
+    # The positions keep their existing "slots", only in the new order - the rest of the portfolio is untouched.
     slots = sorted(by_id[i].sort_order for i in data.position_ids)
     for slot, position_id in zip(slots, data.position_ids):
         by_id[position_id].sort_order = slot
@@ -165,9 +169,14 @@ def update_position(position_id: int, data: PositionIn,
                     user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     position = _get_position(db, position_id, user)
     if position.sales and data.symbol != position.symbol:
-        raise HTTPException(status_code=400, detail="Nie można zmienić coina pozycji, która ma sprzedaże")
-    if data.quantity - data.fee_coin < sold_quantity(position):
-        raise HTTPException(status_code=400, detail="Ilość po opłacie nie może być mniejsza niż już sprzedana")
+        raise BadRequest("position.symbol_locked", "Cannot change the coin of a position that has sales")
+    sold = sold_quantity(position)
+    if data.quantity - data.fee_coin < sold:
+        raise BadRequest(
+            "position.quantity_below_sold",
+            "Quantity after fee cannot be lower than the already sold quantity",
+            sold=_fmt(sold), symbol=position.symbol,
+        )
     for field, value in data.model_dump().items():
         setattr(position, field, value)
     db.commit()
@@ -178,13 +187,13 @@ def update_position(position_id: int, data: PositionIn,
 def delete_position(position_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     position = _get_position(db, position_id, user)
     portfolio = position.portfolio
-    # Sprzedaż obejmująca też inne pozycje traci tylko część z tej pozycji.
+    # A sale covering other positions as well only loses the part belonging to this position.
     db.delete(position)
     db.commit()
     return _view(db, portfolio)
 
 
-# --------------------------------------------------------------- sprzedaże
+# ------------------------------------------------------------------- sales
 
 @router.post("/portfolios/{portfolio_id}/sales", response_model=PortfolioOut, status_code=201)
 def add_sale(portfolio_id: int, data: SaleIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):

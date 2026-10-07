@@ -5,11 +5,11 @@ from pathlib import Path
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-# Folder server/ w sys.path, żeby importy działały niezależnie od katalogu startowego.
+# Put server/ on sys.path so imports work regardless of the working directory.
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
 
-import models  # noqa: E402,F401  (rejestruje wszystkie modele w Base.metadata)
+import models  # noqa: E402,F401  (registers all models in Base.metadata)
 from config import settings  # noqa: E402
 from database.db import Base  # noqa: E402
 
@@ -27,7 +27,7 @@ with connectable.connect() as connection:
     context.configure(
         connection=connection,
         target_metadata=Base.metadata,
-        render_as_batch=True,  # SQLite nie wspiera większości ALTER TABLE
+        render_as_batch=True,  # SQLite does not support most ALTER TABLE operations
     )
 
     with context.begin_transaction():

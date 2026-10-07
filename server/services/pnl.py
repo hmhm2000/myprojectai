@@ -1,13 +1,13 @@
-"""Wyliczenia zysku/straty (wszystko w Decimal).
+"""Profit/loss calculations (all in Decimal).
 
-Dla jednej pozycji (zakupu):
-    koszt           = cena_zakupu × ilość               (ile USDT wydano)
-    posiadane       = ilość − opłata_w_coinie
-    otwarte         = posiadane − suma sprzedanych
-    koszt_sprzed.   = koszt × sprzedane / posiadane
-    zrealizowany    = Σ(ilość_sprz × cena_sprz − opłata_USDT) − koszt_sprzed.
-    niezrealizowany = otwarte × cena_bieżąca − (koszt − koszt_sprzed.)
-    zysk całkowity  = zrealizowany + niezrealizowany,  % = zysk / koszt
+For a single position (purchase):
+    cost        = buy_price × quantity                (USDT spent)
+    held        = quantity − fee_in_coin
+    open        = held − sum of sold quantities
+    sold_cost   = cost × sold / held
+    realized    = Σ(sold_qty × sale_price − fee_USDT) − sold_cost
+    unrealized  = open × current_price − (cost − sold_cost)
+    total       = realized + unrealized,  % = total / cost
 """
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ class PositionMetrics:
     open_cost: Decimal
     proceeds: Decimal
     realized_pnl: Decimal
-    value: Optional[Decimal]            # None = brak ceny dla otwartej pozycji
+    value: Optional[Decimal]            # None = no price for an open position
     unrealized_pnl: Optional[Decimal]
     total_pnl: Optional[Decimal]
     total_pnl_pct: Optional[Decimal]
@@ -64,7 +64,7 @@ def held_quantity(position: PositionLike) -> Decimal:
 
 
 def sold_quantity(position: PositionLike, exclude_group: Optional[str] = None) -> Decimal:
-    """Sprzedana ilość; exclude_group pomija sprzedaż, która jest właśnie edytowana."""
+    """Sold quantity; exclude_group skips the sale that is currently being edited."""
     return sum(
         (s.quantity for s in position.sales if exclude_group is None or getattr(s, "group_id", None) != exclude_group),
         ZERO,
@@ -108,17 +108,17 @@ def position_metrics(position: PositionLike, current_price: Optional[Decimal]) -
 
 @dataclass(frozen=True)
 class GroupMetrics:
-    """Suma dla coina lub całego portfela (tylko część otwarta + zrealizowany zysk)."""
+    """Totals for a coin or the whole portfolio (open part + realized profit)."""
     open_quantity: Decimal
-    invested: Decimal                   # koszt otwartej części
-    total_cost: Decimal                 # koszt wszystkich pozycji (też zamkniętych)
-    value: Optional[Decimal]            # None = żadna otwarta pozycja nie ma ceny
-    unrealized_pnl: Optional[Decimal]   # zysk tylko z otwartych pozycji
+    invested: Decimal                   # cost of the open part
+    total_cost: Decimal                 # cost of all positions (closed ones too)
+    value: Optional[Decimal]            # None = no open position has a price
+    unrealized_pnl: Optional[Decimal]   # profit of open positions only
     unrealized_pnl_pct: Optional[Decimal]
-    realized_pnl: Decimal               # zysk ze sprzedaży (także pozycji zamkniętych)
-    total_pnl: Optional[Decimal]        # zysk ogólny = zrealizowany + niezrealizowany
-    total_pnl_pct: Optional[Decimal]    # zysk ogólny / koszt wszystkich pozycji
-    missing_price: bool                 # część otwartych pozycji nie ma ceny (sumy niepełne)
+    realized_pnl: Decimal               # profit from sales (closed positions too)
+    total_pnl: Optional[Decimal]        # overall profit = realized + unrealized
+    total_pnl_pct: Optional[Decimal]    # overall profit / cost of all positions
+    missing_price: bool                 # some open positions have no price (totals incomplete)
 
 
 def group_metrics(metrics: Iterable[PositionMetrics]) -> GroupMetrics:
@@ -138,7 +138,7 @@ def group_metrics(metrics: Iterable[PositionMetrics]) -> GroupMetrics:
     total_cost = sum((m.cost for m in metrics), ZERO)
     total = None if unrealized is None else realized + unrealized
     if not open_items:
-        total = realized  # same zamknięte pozycje: wynik nie zależy od ceny
+        total = realized  # only closed positions: the result doesn't depend on price
     return GroupMetrics(
         open_quantity=sum((m.open_quantity for m in open_items), ZERO),
         invested=q(sum((m.open_cost for m in open_items), ZERO)),
@@ -154,9 +154,9 @@ def group_metrics(metrics: Iterable[PositionMetrics]) -> GroupMetrics:
 
 
 def split_fee(fee: Decimal, quantities: list[Decimal]) -> list[Decimal]:
-    """Rozdziela opłatę sprzedaży na pozycje proporcjonalnie do sprzedanej ilości.
+    """Split a sale fee across positions proportionally to the sold quantity.
 
-    Suma części jest zawsze dokładnie równa opłacie (reszta z zaokrągleń trafia do ostatniej).
+    The parts always add up exactly to the fee (the rounding remainder goes to the last part).
     """
     total_quantity = sum(quantities, ZERO)
     if fee == 0 or total_quantity <= 0:
@@ -167,15 +167,15 @@ def split_fee(fee: Decimal, quantities: list[Decimal]) -> list[Decimal]:
 
 @dataclass(frozen=True)
 class AveragePrices:
-    avg_buy_price: Optional[Decimal]     # średnia cena zakupu otwartych pozycji (ważona pozostałą ilością)
-    break_even_price: Optional[Decimal]  # koszt otwartej części / otwarta ilość (uwzględnia opłatę w coinie)
+    avg_buy_price: Optional[Decimal]     # average buy price of open positions (weighted by remaining quantity)
+    break_even_price: Optional[Decimal]  # open cost / open quantity (includes the fee taken in coin)
 
 
 def average_prices(items: Iterable[tuple[PositionLike, PositionMetrics]]) -> AveragePrices:
-    """Średnie dla otwartych pozycji jednego coina.
+    """Averages for the open positions of one coin.
 
-    Wagą jest ilość, która na pozycji jeszcze została - po sprzedaży (także częściowej)
-    średnia przelicza się sama, a zamknięte pozycje przestają się liczyć.
+    The weight is the quantity still open on each position - after a (partial) sale the
+    average updates automatically and closed positions stop counting.
     """
     open_items = [(p, m) for p, m in items if not m.is_closed and m.held_quantity > 0]
     open_quantity = sum((m.open_quantity for _, m in open_items), ZERO)

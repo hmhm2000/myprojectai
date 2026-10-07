@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { errorMessage } from "../api/client";
+import { t } from "../i18n";
 import Modal from "./Modal";
 
-/** Potwierdzenie operacji nieodwracalnej (np. usunięcie portfela). */
-export default function ConfirmDialog({ title, message, confirmLabel = "Usuń", onConfirm, onClose }) {
+/** Confirmation of an irreversible action (e.g. deleting a portfolio). */
+export default function ConfirmDialog({ title, message, confirmLabel = t("common.actions.delete"), onConfirm, onClose }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -26,10 +27,10 @@ export default function ConfirmDialog({ title, message, confirmLabel = "Usuń", 
       footer={
         <>
           <button type="button" className="btn-ghost" onClick={onClose} disabled={busy}>
-            Anuluj
+            {t("common.actions.cancel")}
           </button>
           <button type="button" className="btn-danger" onClick={confirm} disabled={busy} autoFocus>
-            {busy ? "Usuwanie…" : confirmLabel}
+            {busy ? t("common.actions.deleting") : confirmLabel}
           </button>
         </>
       }

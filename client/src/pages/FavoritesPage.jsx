@@ -8,10 +8,12 @@ import PriceStatusBar from "../components/PriceStatusBar";
 import { CloseIcon, EditIcon, PlusIcon, TrashIcon } from "../components/icons";
 import { Change24h, CoinBadge, EmptyState, ErrorBanner } from "../components/ui";
 import { usePrices } from "../context/contexts";
-import { fmtPrice } from "../lib/format";
+import { t } from "../i18n";
+import Trans from "../i18n/Trans";
+import { fmtUnitPrice } from "../lib/format";
+import { sourceName } from "../lib/sources";
 
 const SELECTED_KEY = "favorites:selected";
-const SOURCE_NAMES = { okx: "OKX", bybit: "Bybit" };
 
 function FavoriteTile({ symbol, quote, onRemove }) {
   return (
@@ -21,13 +23,13 @@ function FavoriteTile({ symbol, quote, onRemove }) {
           <CoinBadge symbol={symbol} />
           <div>
             <div className="font-semibold text-zinc-50">{symbol}</div>
-            {quote && <span className="chip mt-0.5">{SOURCE_NAMES[quote.source] ?? quote.source}</span>}
+            {quote && <span className="chip mt-0.5">{sourceName(quote.source)}</span>}
           </div>
         </div>
         <button
           type="button"
           className="btn-icon h-7 w-7 opacity-60 transition group-hover:opacity-100 hover:text-loss"
-          title={`Usuń ${symbol} z listy`}
+          title={t("favorites.removeCoin", { symbol })}
           onClick={onRemove}
         >
           <CloseIcon size={14} />
@@ -37,15 +39,15 @@ function FavoriteTile({ symbol, quote, onRemove }) {
         {quote ? (
           <>
             <span className={`num text-xl font-semibold ${quote.stale ? "text-zinc-400" : "text-zinc-50"}`}>
-              ${fmtPrice(quote.price)}
+              {fmtUnitPrice(quote.price)}
             </span>
             <span className="text-right">
               <Change24h value={quote.change_24h_pct} />
-              <div className="text-[10px] uppercase tracking-wider text-zinc-600">24h</div>
+              <div className="text-[10px] uppercase tracking-wider text-zinc-600">{t("prices.change24h")}</div>
             </span>
           </>
         ) : (
-          <span className="text-sm text-amber-300">brak ceny na OKX/Bybit</span>
+          <span className="text-sm text-amber-300">{t("coins.noPriceOnExchanges")}</span>
         )}
       </div>
     </div>
@@ -68,7 +70,7 @@ export default function FavoritesPage() {
       setLists(data);
       setSelectedId((current) => (data.some((l) => l.id === current) ? current : data[0]?.id ?? null));
     } catch (err) {
-      setError(errorMessage(err, "Nie udało się wczytać list"));
+      setError(errorMessage(err, "favorites.loadFailed"));
     }
   }, []);
 
@@ -92,7 +94,7 @@ export default function FavoritesPage() {
       setError(errorMessage(err));
     }
     setNewSymbol("");
-    setPickerKey((k) => k + 1); // czyści pole wyszukiwania
+    setPickerKey((k) => k + 1); // clears the search field
   };
 
   const removeCoin = async (symbol) => {
@@ -104,7 +106,7 @@ export default function FavoritesPage() {
   };
 
   if (lists === null) {
-    return error ? <ErrorBanner>{error}</ErrorBanner> : <p className="text-sm text-zinc-500">Ładowanie list…</p>;
+    return error ? <ErrorBanner>{error}</ErrorBanner> : <p className="text-sm text-zinc-500">{t("favorites.loading")}</p>;
   }
 
   return (
@@ -126,15 +128,15 @@ export default function FavoritesPage() {
             </button>
           ))}
           <button type="button" className="btn-ghost shrink-0" onClick={() => setModal({ type: "create" })}>
-            <PlusIcon size={16} /> Lista
+            <PlusIcon size={16} /> {t("favorites.newList")}
           </button>
         </div>
         {selected && (
           <div className="flex shrink-0 gap-1">
-            <button type="button" className="btn-icon" title="Zmień nazwę listy" onClick={() => setModal({ type: "rename" })}>
+            <button type="button" className="btn-icon" title={t("favorites.renameList")} onClick={() => setModal({ type: "rename" })}>
               <EditIcon size={16} />
             </button>
-            <button type="button" className="btn-icon hover:text-loss" title="Usuń listę" onClick={() => setModal({ type: "delete" })}>
+            <button type="button" className="btn-icon hover:text-loss" title={t("favorites.deleteList")} onClick={() => setModal({ type: "delete" })}>
               <TrashIcon size={16} />
             </button>
           </div>
@@ -145,14 +147,14 @@ export default function FavoritesPage() {
 
       {lists.length === 0 ? (
         <EmptyState
-          title="Brak list ulubionych"
+          title={t("favorites.emptyTitle")}
           action={
             <button type="button" className="btn-primary" onClick={() => setModal({ type: "create" })}>
-              <PlusIcon size={16} /> Utwórz listę
+              <PlusIcon size={16} /> {t("favorites.createList")}
             </button>
           }
         >
-          Utwórz listę (np. „Memecoiny”) i dodaj do niej coiny, żeby mieć ich ceny pod ręką.
+          {t("favorites.emptyText")}
         </EmptyState>
       ) : (
         selected && (
@@ -175,7 +177,7 @@ export default function FavoritesPage() {
             </div>
 
             {selected.coins.length === 0 ? (
-              <EmptyState title="Lista jest pusta">Wyszukaj coina powyżej i wybierz go, aby dodać go do listy.</EmptyState>
+              <EmptyState title={t("favorites.listEmptyTitle")}>{t("favorites.listEmptyText")}</EmptyState>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {selected.coins.map((coin) => (
@@ -189,8 +191,8 @@ export default function FavoritesPage() {
 
       {modal?.type === "create" && (
         <NameDialog
-          title="Nowa lista ulubionych"
-          submitLabel="Utwórz"
+          title={t("favorites.dialogs.createTitle")}
+          submitLabel={t("common.actions.create")}
           onClose={closeModal}
           onSubmit={async (name) => {
             const created = await favoritesApi.create(name);
@@ -201,7 +203,7 @@ export default function FavoritesPage() {
       )}
       {modal?.type === "rename" && selected && (
         <NameDialog
-          title="Zmień nazwę listy"
+          title={t("favorites.dialogs.renameTitle")}
           initial={selected.name}
           onClose={closeModal}
           onSubmit={async (name) => replaceList(await favoritesApi.rename(selected.id, name))}
@@ -209,12 +211,15 @@ export default function FavoritesPage() {
       )}
       {modal?.type === "delete" && selected && (
         <ConfirmDialog
-          title="Usunąć listę?"
-          confirmLabel="Usuń listę"
+          title={t("favorites.dialogs.deleteTitle")}
+          confirmLabel={t("favorites.dialogs.deleteConfirm")}
           onClose={closeModal}
           message={
             <p>
-              Lista <strong className="text-zinc-100">{selected.name}</strong> ({selected.coins.length} coinów) zostanie usunięta.
+              <Trans
+                k="favorites.dialogs.deleteMessage"
+                values={{ name: <strong className="text-zinc-100">{selected.name}</strong>, count: selected.coins.length }}
+              />
             </p>
           }
           onConfirm={async () => {

@@ -1,7 +1,7 @@
-"""Pozycje, sprzedaże i nowe listy ulubionych (kwoty jako Decimal w tekście)
+"""Positions, sales and new favorite lists (amounts stored as decimal text)
 
-Stare tabele portfolio/portfolio_lists/favorites/favorite_lists zawierały tylko
-dane testowe, więc są usuwane bez przenoszenia. Tabela users zostaje bez zmian.
+The old portfolio/portfolio_lists/favorites/favorite_lists tables held test data only,
+so they are dropped without migrating data. The users table is unchanged.
 
 Revision ID: b7e3c9a1d2f4
 Revises: f4ab0f28dae1
@@ -89,7 +89,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Przywraca puste tabele w starym formacie (dane nowego formatu są tracone).
+    # Recreates empty tables in the old format (data in the new format is lost).
     op.drop_table('favorite_coins')
     op.drop_table('favorite_lists')
     op.drop_table('sales')

@@ -1,9 +1,9 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import JSONResponse
 
 from auth import get_current_user
+from core.errors import AppError
 from schemas.prices import PricesResponse, QuoteResponse, SourceStatusResponse
 from services.price_service import RefreshTooSoon, Snapshot, price_service
 
@@ -34,20 +34,19 @@ def to_response(snapshot: Snapshot, symbols: Optional[set[str]] = None) -> Price
 
 
 @router.get("", response_model=PricesResponse)
-def get_prices(symbols: str = Query("", description="Np. BTC,SPX; puste = wszystkie dostępne")):
-    """Ceny z cache backendu. Giełdy są odpytywane tylko, gdy cache jest starszy niż TTL."""
+def get_prices(symbols: str = Query("", description="E.g. BTC,SPX; empty = all available")):
+    """Prices from the backend cache. Exchanges are queried only when the cache is older than the TTL."""
     wanted = {s.strip().upper() for s in symbols.split(",") if s.strip()}
     return to_response(price_service.get_snapshot(), wanted or None)
 
 
 @router.post("/refresh", response_model=PricesResponse)
 def force_refresh():
-    """Wymuszone pobranie cen (przycisk "Odśwież ceny"), z minimalnym odstępem."""
+    """Forced price refresh ("Refresh prices" button), rate limited."""
     try:
         return to_response(price_service.force_refresh())
     except RefreshTooSoon as exc:
-        return JSONResponse(
-            status_code=429,
-            content={"detail": str(exc), "retry_after": exc.retry_after},
-            headers={"Retry-After": str(exc.retry_after)},
-        )
+        raise AppError(
+            429, "prices.refresh_too_soon", str(exc),
+            headers={"Retry-After": str(exc.retry_after)}, retry_after=exc.retry_after,
+        ) from exc

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { t } from "../i18n";
 import { CloseIcon } from "./icons";
 
 export default function Modal({ title, onClose, children, footer, wide = false }) {
@@ -28,7 +29,7 @@ export default function Modal({ title, onClose, children, footer, wide = false }
       >
         <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
           <h2 className="text-base font-semibold text-zinc-100">{title}</h2>
-          <button type="button" className="btn-icon" onClick={onClose} aria-label="Zamknij">
+          <button type="button" className="btn-icon" onClick={onClose} aria-label={t("common.actions.close")}>
             <CloseIcon />
           </button>
         </div>

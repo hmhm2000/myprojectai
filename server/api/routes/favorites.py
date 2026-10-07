@@ -1,13 +1,13 @@
-"""Listy ulubionych coinów. Ceny frontend bierze z /api/prices (ten sam cache)."""
-from fastapi import APIRouter, Depends, HTTPException, Response
+"""Favorite coin lists. The frontend takes prices from /api/prices (same cache)."""
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 
 from auth import get_current_user
+from core.errors import AppError, NotFound
 from database.db import get_db
 from models.favorites import FavoriteCoin, FavoriteList
 from models.user import User
 from schemas.favorites import FavoriteCoinIn, FavoriteListIn, FavoriteListOut
-from schemas.portfolio import normalize_symbol
 
 router = APIRouter(prefix="/api/favorite-lists", tags=["favorites"])
 
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/favorite-lists", tags=["favorites"])
 def _get_list(db: Session, list_id: int, user: User) -> FavoriteList:
     favorite_list = db.get(FavoriteList, list_id)
     if favorite_list is None or favorite_list.user_id != user.id:
-        raise HTTPException(status_code=404, detail="Lista nie istnieje")
+        raise NotFound("favorites.list_not_found", "Favorite list not found")
     return favorite_list
 
 
@@ -55,7 +55,7 @@ def add_coin(list_id: int, data: FavoriteCoinIn,
              user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     favorite_list = _get_list(db, list_id, user)
     if any(coin.symbol == data.symbol for coin in favorite_list.coins):
-        raise HTTPException(status_code=409, detail=f"{data.symbol} już jest na tej liście")
+        raise AppError(409, "favorites.coin_exists", f"{data.symbol} is already on this list", symbol=data.symbol)
     favorite_list.coins.append(FavoriteCoin(symbol=data.symbol))
     db.commit()
     db.refresh(favorite_list)
@@ -65,10 +65,10 @@ def add_coin(list_id: int, data: FavoriteCoinIn,
 @router.delete("/{list_id}/coins/{symbol}", response_model=FavoriteListOut)
 def remove_coin(list_id: int, symbol: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     favorite_list = _get_list(db, list_id, user)
-    symbol = normalize_symbol(symbol)
+    symbol = symbol.strip().upper()
     coin = next((c for c in favorite_list.coins if c.symbol == symbol), None)
     if coin is None:
-        raise HTTPException(status_code=404, detail="Tego coina nie ma na liście")
+        raise NotFound("favorites.coin_not_found", "This coin is not on the list", symbol=symbol)
     favorite_list.coins.remove(coin)
     db.commit()
     db.refresh(favorite_list)

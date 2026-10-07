@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { fmtMoney, fmtPct, pnlTone } from "../lib/format";
 
 export function Field({ label, htmlFor, hint, children, className = "" }) {
@@ -14,7 +15,7 @@ export function Field({ label, htmlFor, hint, children, className = "" }) {
   );
 }
 
-/** Pole liczby dziesiętnej jako tekst (akceptuje przecinek), bez utraty precyzji. */
+/** Decimal number field kept as text (accepts a comma), without precision loss. */
 export function DecimalInput({ value, onChange, className = "", ...props }) {
   return (
     <input
@@ -47,7 +48,7 @@ export function CoinBadge({ symbol, size = "md" }) {
   );
 }
 
-/** Zysk/strata: kwota + procent, zielony/czerwony. */
+/** Profit/loss: amount + percent, green/red. */
 export function Pnl({ value, pct, className = "", stacked = false }) {
   const tone = pnlTone(value ?? pct);
   if (value === null || value === undefined) {
@@ -85,7 +86,7 @@ export function ErrorBanner({ children, onClose }) {
       <span>{children}</span>
       {onClose && (
         <button type="button" className="text-xs text-red-300 hover:text-red-100" onClick={onClose}>
-          zamknij
+          {t("common.actions.dismiss")}
         </button>
       )}
     </div>

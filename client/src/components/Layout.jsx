@@ -1,11 +1,12 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../context/contexts";
+import { t } from "../i18n";
 import { LogoutIcon, SettingsIcon, StarIcon, WalletIcon } from "./icons";
 
 const LINKS = [
-  { to: "/portfolios", label: "Portfele", Icon: WalletIcon },
-  { to: "/favorites", label: "Ulubione", Icon: StarIcon },
-  { to: "/settings", label: "Ustawienia", Icon: SettingsIcon },
+  { to: "/portfolios", labelKey: "nav.portfolios", Icon: WalletIcon },
+  { to: "/favorites", labelKey: "nav.favorites", Icon: StarIcon },
+  { to: "/settings", labelKey: "nav.settings", Icon: SettingsIcon },
 ];
 
 function Logo() {
@@ -15,7 +16,7 @@ function Logo() {
         <WalletIcon size={16} />
       </div>
       <span className="text-sm font-semibold tracking-wide text-zinc-100">
-        Crypto<span className="text-neon-green">Tracker</span>
+        {t("common.app.logoMain")}<span className="text-neon-green">{t("common.app.logoAccent")}</span>
       </span>
     </div>
   );
@@ -26,7 +27,7 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen pb-20 md:pb-0">
-      {/* Górny pasek */}
+      {/* Top bar */}
       <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-ink-950/80 backdrop-blur-md">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4">
           <Logo />
@@ -44,13 +45,13 @@ export default function Layout() {
                 }
               >
                 <link.Icon size={16} />
-                {link.label}
+                {t(link.labelKey)}
               </NavLink>
             ))}
           </nav>
           <div className="flex items-center gap-2">
             <span className="hidden text-xs text-zinc-500 sm:inline">{user?.username}</span>
-            <button type="button" className="btn-icon" onClick={logout} title="Wyloguj" aria-label="Wyloguj">
+            <button type="button" className="btn-icon" onClick={logout} title={t("nav.logout")} aria-label={t("nav.logout")}>
               <LogoutIcon size={16} />
             </button>
           </div>
@@ -61,7 +62,7 @@ export default function Layout() {
         <Outlet />
       </main>
 
-      {/* Dolna nawigacja na telefonie */}
+      {/* Bottom navigation on phones */}
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.06] bg-ink-950/90 backdrop-blur-md md:hidden">
         <div className="grid grid-cols-3">
           {LINKS.map((link) => (
@@ -75,7 +76,7 @@ export default function Layout() {
               }
             >
               <link.Icon size={20} />
-              {link.label}
+              {t(link.labelKey)}
             </NavLink>
           ))}
         </div>

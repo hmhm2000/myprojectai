@@ -4,10 +4,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-import models  # noqa: F401  (rejestruje wszystkie modele)
+import models  # noqa: F401  (registers all models)
 from api.routes import favorites, portfolios, prices, users
 from auth import ensure_admin_account, router as auth_router
 from config import settings
+from core.errors import AppError, app_error_handler
 from database.db import engine
 from services.price_service import price_service
 
@@ -20,14 +21,15 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Start aplikacji. Baza: %s, rejestracja: %s",
-                engine.url, "włączona" if settings.allow_registration else "wyłączona")
+    logger.info("App started. Database: %s, registration: %s",
+                engine.url, "enabled" if settings.allow_registration else "disabled")
     ensure_admin_account()
     price_service.warm_up_in_background()
     yield
 
 
-app = FastAPI(title="Crypto Tracker", lifespan=lifespan)
+app = FastAPI(title="Crypto Tracker API", lifespan=lifespan)
+app.add_exception_handler(AppError, app_error_handler)
 
 app.add_middleware(
     CORSMiddleware,

@@ -7,16 +7,21 @@ import requests
 
 @dataclass(frozen=True)
 class Ticker:
-    symbol: str                      # coin bazowy, np. "BTC"
-    price: Decimal                   # ostatnia cena w walucie kwotowania
+    symbol: str                      # base coin, e.g. "BTC"
+    price: Decimal                   # last price in quote currency
     change_24h_pct: Optional[Decimal]
 
 
 class ProviderError(Exception):
-    """Giełda nie zwróciła poprawnych danych."""
+    """The exchange did not return valid data.
 
-    def __init__(self, message: str, retry_after: Optional[int] = None):
+    ``code`` is a stable identifier translated by the frontend:
+    connection_error, rate_limited, http_error, api_error, invalid_response, unexpected_error.
+    """
+
+    def __init__(self, code: str, message: str, retry_after: Optional[int] = None):
         super().__init__(message)
+        self.code = code
         self.retry_after = retry_after
 
 
@@ -24,7 +29,7 @@ class PriceProvider(Protocol):
     name: str
 
     def fetch_tickers(self, quote: str, timeout: float) -> dict[str, Ticker]:
-        """Jedno zbiorcze zapytanie: wszystkie pary SPOT w danej walucie kwotowania."""
+        """One bulk request: all SPOT pairs in the given quote currency."""
         ...
 
 
@@ -48,17 +53,18 @@ def get_json(url: str, params: dict, timeout: float, exchange: str) -> dict:
     try:
         response = requests.get(url, params=params, timeout=timeout)
     except requests.RequestException as exc:
-        raise ProviderError(f"{exchange}: brak połączenia ({exc.__class__.__name__})") from exc
+        raise ProviderError("connection_error", f"{exchange}: connection failed ({exc.__class__.__name__})") from exc
 
     if response.status_code == 429:
         retry_after = response.headers.get("Retry-After")
         raise ProviderError(
-            f"{exchange}: przekroczony limit zapytań (HTTP 429)",
+            "rate_limited",
+            f"{exchange}: rate limit exceeded (HTTP 429)",
             retry_after=int(retry_after) if retry_after and retry_after.isdigit() else None,
         )
     if response.status_code != 200:
-        raise ProviderError(f"{exchange}: HTTP {response.status_code}")
+        raise ProviderError("http_error", f"{exchange}: HTTP {response.status_code}")
     try:
         return response.json()
     except ValueError as exc:
-        raise ProviderError(f"{exchange}: niepoprawna odpowiedź (nie JSON)") from exc
+        raise ProviderError("invalid_response", f"{exchange}: response is not valid JSON") from exc

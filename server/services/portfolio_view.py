@@ -1,4 +1,4 @@
-"""Składa widok portfela: pozycje pogrupowane po coinie + podsumowania (ceny z cache)."""
+"""Builds the portfolio view: positions grouped by coin + summaries (prices from cache)."""
 from collections import defaultdict
 
 from models.portfolio import Portfolio, Position
@@ -62,7 +62,7 @@ def _coins_and_summary(portfolio: Portfolio, snapshot: Snapshot) -> tuple[list[C
         all_metrics.extend(metrics)
         group = group_metrics(metrics)
         averages = average_prices(pairs)
-        # Zapisana kolejność (przeciąganie); sortowanie wg daty/ceny robi frontend.
+        # Saved (drag & drop) order; sorting by date/price is done by the frontend.
         pairs.sort(key=lambda pm: (pm[0].sort_order, pm[0].id))
         coins.append(CoinOut(
             symbol=symbol,
@@ -78,7 +78,7 @@ def _coins_and_summary(portfolio: Portfolio, snapshot: Snapshot) -> tuple[list[C
             **_group_fields(group),
         ))
 
-    # Coiny z otwartymi pozycjami według wartości, na końcu w pełni zamknięte.
+    # Coins with open positions by value, fully closed coins last.
     coins.sort(key=lambda c: (c.open_positions == 0, -(c.value or 0), c.symbol))
 
     summary_group = group_metrics(all_metrics)

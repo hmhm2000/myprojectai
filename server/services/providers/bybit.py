@@ -1,6 +1,6 @@
-"""Bybit: GET /v5/market/tickers?category=spot (publiczny, bez klucza API).
+"""Bybit: GET /v5/market/tickers?category=spot (public, no API key).
 
-Jedno zapytanie zwraca wszystkie pary spot. Format pary: "SPXUSDT" (bez separatora).
+One request returns all spot pairs. Pair format: "SPXUSDT" (no separator).
 """
 from services.providers.base import ProviderError, Ticker, change_pct, get_json, to_decimal
 
@@ -13,7 +13,7 @@ class BybitProvider:
     def fetch_tickers(self, quote: str, timeout: float) -> dict[str, Ticker]:
         payload = get_json(TICKERS_URL, {"category": "spot"}, timeout, "Bybit")
         if payload.get("retCode") != 0:
-            raise ProviderError(f"Bybit: błąd API {payload.get('retCode')}: {payload.get('retMsg')}")
+            raise ProviderError("api_error", f"Bybit: API error {payload.get('retCode')}: {payload.get('retMsg')}")
         return parse_tickers((payload.get("result") or {}).get("list") or [], quote)
 
 

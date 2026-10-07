@@ -18,7 +18,8 @@ class SourceStatusResponse(BaseModel):
     ok: bool
     fetched_at: Optional[datetime]
     stale: bool
-    error: Optional[str]
+    error: Optional[str]          # English description (for logs/debugging)
+    error_code: Optional[str]     # stable code, translated by the frontend
     count: int
 
 

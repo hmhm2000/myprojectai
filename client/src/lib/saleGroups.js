@@ -1,8 +1,8 @@
 import { sum } from "./decimal";
 
 /**
- * Sprzedaż w API to grupa wierszy (po jednym na pozycję) z tym samym group_id.
- * Tu składamy je z powrotem w jedną transakcję: cena, data, łączna opłata i podział na pozycje.
+ * In the API a sale is a group of rows (one per position) sharing a group_id.
+ * Here they are put back together into one transaction: price, date, total fee and split per position.
  */
 export function collectSaleGroups(coin) {
   const groups = new Map();

@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { errorMessage } from "../api/client";
+import { t } from "../i18n";
 import Modal from "./Modal";
 import { Field } from "./ui";
 
-/** Okno z jednym polem "nazwa" (nowy/zmiana nazwy portfela lub listy). */
-export default function NameDialog({ title, label = "Nazwa", initial = "", submitLabel = "Zapisz", onSubmit, onClose }) {
+/** Dialog with a single "name" field (create/rename a portfolio or list). */
+export default function NameDialog({ title, label = t("common.name"), initial = "", submitLabel = t("common.actions.save"), onSubmit, onClose }) {
   const [name, setName] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -32,9 +33,9 @@ export default function NameDialog({ title, label = "Nazwa", initial = "", submi
         </Field>
         {error && <p className="text-sm text-loss">{error}</p>}
         <div className="flex justify-end gap-2">
-          <button type="button" className="btn-ghost" onClick={onClose}>Anuluj</button>
+          <button type="button" className="btn-ghost" onClick={onClose}>{t("common.actions.cancel")}</button>
           <button type="submit" className="btn-primary" disabled={busy || !name.trim()}>
-            {busy ? "Zapisywanie…" : submitLabel}
+            {busy ? t("common.actions.saving") : submitLabel}
           </button>
         </div>
       </form>

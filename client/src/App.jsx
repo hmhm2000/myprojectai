@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
 import { AuthProvider } from "./context/AuthProvider";
@@ -8,13 +9,14 @@ import LoginPage from "./pages/LoginPage";
 import PortfoliosPage from "./pages/PortfoliosPage";
 import RegisterPage from "./pages/RegisterPage";
 import SettingsPage from "./pages/SettingsPage";
+import { LANGUAGE, t } from "./i18n";
 
 function FullScreenLoader() {
   return (
     <div className="grid min-h-screen place-items-center text-sm text-zinc-500">
       <div className="flex items-center gap-3">
         <span className="h-2 w-2 animate-ping rounded-full bg-neon-violet" />
-        Ładowanie…
+        {t("common.loading")}
       </div>
     </div>
   );
@@ -47,6 +49,11 @@ function AppRoutes() {
 }
 
 export default function App() {
+  useEffect(() => {
+    document.title = t("common.app.name");
+    document.documentElement.lang = LANGUAGE;
+  }, []);
+
   return (
     <AuthProvider>
       <PriceProvider>

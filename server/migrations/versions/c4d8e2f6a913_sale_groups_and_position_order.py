@@ -1,9 +1,9 @@
-"""Grupy sprzedaży (jedna sprzedaż z kilku pozycji) i własna kolejność pozycji
+"""Sale groups (one sale across several positions) and custom position order
 
-- sales.group_id: sprzedaże z tym samym group_id to jedna transakcja rozdzielona na pozycje.
-  Istniejące sprzedaże dostają własną, jednoelementową grupę.
-- positions.sort_order: kolejność ustawiana przeciąganiem. Istniejące pozycje
-  numerowane wg daty zakupu.
+- sales.group_id: sales sharing a group_id are one transaction split across positions.
+  Existing sales get their own single-item group.
+- positions.sort_order: order set by drag & drop. Existing positions are numbered
+  by purchase date.
 
 Revision ID: c4d8e2f6a913
 Revises: b7e3c9a1d2f4

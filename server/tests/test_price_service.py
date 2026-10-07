@@ -52,25 +52,26 @@ def test_failure_keeps_last_prices_marked_stale_and_backs_off(clock, okx_fake, b
     first = service.get_snapshot()
 
     clock.advance(200)
-    okx_fake.error = ProviderError("OKX: brak połączenia")
+    okx_fake.error = ProviderError("connection_error", "OKX: connection failed")
     snapshot = service.get_snapshot()
 
     assert snapshot.stale is True
-    assert snapshot.quotes["ETH"].price == Decimal("2500")      # ostatnia znana cena
+    assert snapshot.quotes["ETH"].price == Decimal("2500")      # last known price
     assert snapshot.quotes["ETH"].stale is True
-    assert snapshot.quotes["SPX"].stale is False                 # Bybit działa
+    assert snapshot.quotes["SPX"].stale is False                 # Bybit still works
     okx_status = next(s for s in snapshot.sources if s.name == "okx")
-    assert okx_status.error == "OKX: brak połączenia"
-    assert okx_status.fetched_at == first.sources[0].fetched_at  # "nieaktualne od..."
+    assert okx_status.error == "OKX: connection failed"
+    assert okx_status.error_code == "connection_error"
+    assert okx_status.fetched_at == first.sources[0].fetched_at  # "stale since..."
     assert snapshot.fetched_at == first.fetched_at
 
-    # W czasie backoffu giełda nie jest odpytywana ponownie.
+    # During backoff the exchange is not queried again.
     calls = okx_fake.calls
     clock.advance(10)
     service.get_snapshot()
     assert okx_fake.calls == calls
 
-    # Po backoffie kolejna próba; giełda wróciła.
+    # After backoff: another attempt; the exchange is back.
     okx_fake.error = None
     clock.advance(21)
     snapshot = service.get_snapshot()
@@ -80,7 +81,7 @@ def test_failure_keeps_last_prices_marked_stale_and_backs_off(clock, okx_fake, b
 
 def test_rate_limit_retry_after_extends_backoff(clock, okx_fake):
     service = make_service(clock, okx_fake, backoff=30)
-    okx_fake.error = ProviderError("OKX: HTTP 429", retry_after=120)
+    okx_fake.error = ProviderError("rate_limited", "OKX: HTTP 429", retry_after=120)
     service.get_snapshot()
     clock.advance(100)
     service.get_snapshot()
@@ -95,7 +96,7 @@ def test_force_refresh_has_minimum_interval(clock, okx_fake):
     service.get_snapshot()
     assert okx_fake.calls == 1
 
-    service.force_refresh()  # cache świeży, ale wymuszamy
+    service.force_refresh()  # cache is fresh, but we force it
     assert okx_fake.calls == 2
 
     clock.advance(3)

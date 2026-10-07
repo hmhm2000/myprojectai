@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { usePrices } from "../context/contexts";
+import { t } from "../i18n";
+import Trans from "../i18n/Trans";
 import { fmtDateTime, fmtTime } from "../lib/format";
+import { sourceErrorText, sourceName } from "../lib/sources";
 import { AlertIcon, RefreshIcon } from "./icons";
-
-const SOURCE_NAMES = { okx: "OKX", bybit: "Bybit" };
 
 function useCountdown(until) {
   const [now, setNow] = useState(() => Date.now());
@@ -19,7 +20,7 @@ function useCountdown(until) {
   return Math.max(0, Math.ceil((until - now) / 1000));
 }
 
-/** Stan cen + przycisk "Odśwież ceny" (z limitem, który pilnuje też backend). */
+/** Price status + "Refresh prices" button (rate limited, also enforced by the backend). */
 export default function PriceStatusBar({ compact = false }) {
   const { data, error, refreshing, cooldownUntil, forceRefresh } = usePrices();
   const wait = useCountdown(cooldownUntil);
@@ -33,13 +34,13 @@ export default function PriceStatusBar({ compact = false }) {
           <span className={`inline-block h-2 w-2 rounded-full ${stale ? "bg-amber-400" : "bg-neon-green shadow-neon-green"}`} />
           {data?.fetched_at ? (
             <span>
-              Ceny z <span className="num text-zinc-300">{fmtTime(data.fetched_at)}</span>
+              <Trans k="prices.statusBar.pricesFrom" values={{ time: <span className="num text-zinc-300">{fmtTime(data.fetched_at)}</span> }} />
               {!compact && (
-                <span className="muted"> · {data.sources.map((s) => SOURCE_NAMES[s.name] ?? s.name).join(" + ")} · {data.quote_currency}</span>
+                <span className="muted"> · {data.sources.map((s) => sourceName(s.name)).join(" + ")} · {data.quote_currency}</span>
               )}
             </span>
           ) : (
-            <span>{data ? "Brak cen" : "Ładowanie cen…"}</span>
+            <span>{data ? t("prices.statusBar.noPrices") : t("prices.statusBar.loading")}</span>
           )}
         </div>
         <button
@@ -47,10 +48,10 @@ export default function PriceStatusBar({ compact = false }) {
           className="btn-ghost py-1.5 text-xs"
           onClick={forceRefresh}
           disabled={refreshing || wait > 0}
-          title="Wymusza pobranie cen z giełd"
+          title={t("prices.statusBar.refreshTitle")}
         >
           <RefreshIcon size={14} className={refreshing ? "animate-spin" : ""} />
-          {refreshing ? "Odświeżanie…" : wait > 0 ? `Odśwież (${wait}s)` : "Odśwież ceny"}
+          {refreshing ? t("prices.statusBar.refreshing") : wait > 0 ? t("prices.statusBar.refreshWait", { seconds: wait }) : t("prices.statusBar.refresh")}
         </button>
       </div>
 
@@ -61,11 +62,11 @@ export default function PriceStatusBar({ compact = false }) {
             {error && <p>{error}</p>}
             {failed.map((s) => (
               <p key={s.name}>
-                <span className="font-semibold">{SOURCE_NAMES[s.name] ?? s.name}:</span>{" "}
+                <span className="font-semibold">{sourceName(s.name)}:</span>{" "}
                 {s.fetched_at
-                  ? `ceny nieaktualne, ostatnie z ${fmtDateTime(s.fetched_at)}.`
-                  : "brak danych."}
-                {s.error && <span className="text-amber-300/70"> ({s.error})</span>}
+                  ? t("prices.statusBar.staleSince", { date: fmtDateTime(s.fetched_at) })
+                  : t("prices.statusBar.noData")}
+                {s.error_code && <span className="text-amber-300/70"> ({sourceErrorText(s.error_code)})</span>}
               </p>
             ))}
           </div>

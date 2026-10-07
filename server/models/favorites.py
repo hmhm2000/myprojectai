@@ -27,7 +27,7 @@ class FavoriteCoin(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     list_id = Column(Integer, ForeignKey("favorite_lists.id", ondelete="CASCADE"), nullable=False, index=True)
-    symbol = Column(String, nullable=False)  # np. "SPX"
+    symbol = Column(String, nullable=False)  # e.g. "SPX"
     added_at = Column(DateTime, nullable=False, default=utcnow)
 
     favorite_list = relationship("FavoriteList", back_populates="coins")

@@ -28,18 +28,18 @@ class Portfolio(Base):
 
 
 class Position(Base):
-    """Jeden zakup. Zysk liczony jest osobno dla każdej pozycji."""
+    """A single purchase. Profit/loss is calculated separately for every position."""
 
     __tablename__ = "positions"
     id = Column(Integer, primary_key=True, index=True)
     portfolio_id = Column(Integer, ForeignKey("portfolios.id", ondelete="CASCADE"), nullable=False, index=True)
-    symbol = Column(String, nullable=False, index=True)  # np. "BTC"
-    buy_price = Column(DecimalString, nullable=False)    # w walucie kwotowania (USDT) za 1 coin
-    quantity = Column(DecimalString, nullable=False)     # kupiona ilość (przed opłatą)
-    fee_coin = Column(DecimalString, nullable=False, default=0)  # opłata pobrana w coinie
+    symbol = Column(String, nullable=False, index=True)  # e.g. "BTC"
+    buy_price = Column(DecimalString, nullable=False)    # in quote currency (USDT) per 1 coin
+    quantity = Column(DecimalString, nullable=False)     # bought quantity (before fee)
+    fee_coin = Column(DecimalString, nullable=False, default=0)  # fee taken in coin
     bought_at = Column(DateTime, nullable=False)
     note = Column(Text, nullable=True)
-    sort_order = Column(Integer, nullable=False, default=0)  # kolejność ustawiana przeciąganiem
+    sort_order = Column(Integer, nullable=False, default=0)  # order set by drag & drop
     created_at = Column(DateTime, nullable=False, default=utcnow)
 
     portfolio = relationship("Portfolio", back_populates="positions")
@@ -52,19 +52,19 @@ class Position(Base):
 
 
 class Sale(Base):
-    """Sprzedaż (częściowa lub całkowita) konkretnej pozycji.
+    """A (partial or full) sale of one position.
 
-    Jedna transakcja sprzedaży może obejmować kilka pozycji - wtedy jest zapisana jako kilka
-    wierszy z tym samym group_id (ta sama cena i data, opłata rozdzielona proporcjonalnie).
+    A single sale transaction may cover several positions - it is then stored as several
+    rows sharing the same group_id (same price and date, fee split proportionally).
     """
 
     __tablename__ = "sales"
     id = Column(Integer, primary_key=True, index=True)
     group_id = Column(String(36), nullable=False, index=True)
     position_id = Column(Integer, ForeignKey("positions.id", ondelete="CASCADE"), nullable=False, index=True)
-    price = Column(DecimalString, nullable=False)       # cena sprzedaży za 1 coin
-    quantity = Column(DecimalString, nullable=False)    # sprzedana ilość coina
-    fee_quote = Column(DecimalString, nullable=False, default=0)  # opłata w USDT
+    price = Column(DecimalString, nullable=False)       # sale price per 1 coin
+    quantity = Column(DecimalString, nullable=False)    # sold coin quantity
+    fee_quote = Column(DecimalString, nullable=False, default=0)  # fee in quote currency (USDT)
     sold_at = Column(DateTime, nullable=False)
     note = Column(Text, nullable=True)
     created_at = Column(DateTime, nullable=False, default=utcnow)

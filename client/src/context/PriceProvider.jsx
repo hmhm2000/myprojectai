@@ -6,10 +6,10 @@ import { PriceContext, useAuth } from "./contexts";
 const CHECK_EVERY_MS = 15_000;
 
 /**
- * Jedno źródło cen dla całej aplikacji.
- * - Ceny pobierane są z backendu (który trzyma własny cache i sam decyduje, czy pytać giełdę).
- * - Przełączanie widoków korzysta z danych w pamięci, bez nowych zapytań.
- * - Gdy karta jest widoczna, a dane starsze niż TTL, pobieramy je ponownie z backendu.
+ * Single source of prices for the whole app.
+ * - Prices come from the backend (which keeps its own cache and decides whether to query exchanges).
+ * - Switching views uses the data in memory, without new requests.
+ * - When the tab is visible and the data is older than the TTL, it is fetched again from the backend.
  */
 export function PriceProvider({ children }) {
   const { user } = useAuth();
@@ -33,7 +33,7 @@ export function PriceProvider({ children }) {
     try {
       applyData(await pricesApi.get());
     } catch (err) {
-      setError(errorMessage(err, "Nie udało się pobrać cen z serwera"));
+      setError(errorMessage(err, "prices.loadFailed"));
     }
   }, [applyData]);
 
@@ -43,9 +43,9 @@ export function PriceProvider({ children }) {
       applyData(await pricesApi.refresh());
     } catch (err) {
       if (err.response?.status === 429) {
-        setCooldownUntil(Date.now() + (err.response.data?.retry_after ?? 5) * 1000);
+        setCooldownUntil(Date.now() + (err.response.data?.params?.retry_after ?? 5) * 1000);
       } else {
-        setError(errorMessage(err, "Nie udało się odświeżyć cen"));
+        setError(errorMessage(err, "prices.refreshFailed"));
       }
     } finally {
       setRefreshing(false);
@@ -69,7 +69,7 @@ export function PriceProvider({ children }) {
     return () => clearInterval(id);
   }, [user, ttlMs, load]);
 
-  // Zmienia się tylko, gdy backend faktycznie ma nowe ceny -> widoki mogą się wtedy przeliczyć.
+  // Changes only when the backend actually has new prices -> views can recalculate then.
   const version = data ? data.sources.map((s) => s.fetched_at).join("|") : "";
 
   const value = useMemo(

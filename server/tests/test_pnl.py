@@ -13,7 +13,7 @@ def sale(price, quantity, fee_quote="0"):
 
 
 def test_open_position_with_coin_fee():
-    # 1 BTC po 50 000, opłata 0,001 BTC -> na koncie 0,999 BTC
+    # 1 BTC at 50,000, fee 0.001 BTC -> 0.999 BTC held
     m = position_metrics(position("50000", "1", "0.001"), D("60000"))
     assert m.held_quantity == D("0.999")
     assert m.cost == D("50000")
@@ -67,16 +67,16 @@ def test_group_with_missing_price_is_flagged():
     group = group_metrics([priced, unpriced])
     assert group.missing_price is True
     assert group.value == D("12")
-    assert group.unrealized_pnl_pct == D("20.00")     # liczone tylko z wycenionych
+    assert group.unrealized_pnl_pct == D("20.00")     # computed from priced positions only
 
 
 def test_group_total_includes_closed_positions():
     closed = position_metrics(position("100", "1", sales=[sale("150", "1")]), D("1"))
     open_ = position_metrics(position("100", "1"), D("90"))
     group = group_metrics([closed, open_])
-    assert group.unrealized_pnl == D("-10")        # tylko otwarte
+    assert group.unrealized_pnl == D("-10")        # open positions only
     assert group.realized_pnl == D("50")
-    assert group.total_pnl == D("40")               # ogólny
+    assert group.total_pnl == D("40")               # overall
     assert group.total_cost == D("200")
     assert group.total_pnl_pct == D("20.00")
 
