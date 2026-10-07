@@ -328,3 +328,19 @@ Co zostało sprawdzone w przeglądarce (Edge headless, kopia bazy):
 Wszystkie 16 sprawdzeń przeszło, a w konsoli nie było błędów.
 
 **Uwaga o gicie:** na początku przebudowy usuwałem stare pliki poleceniem `git rm`, więc te usunięcia są już „zastage’owane” w indeksie (nic nie zostało zacommitowane). Zobaczysz je w `git status` jako `D`. Commit robisz sam.
+
+---
+
+## Etap 8: średnia cena zakupu otwartych pozycji
+
+- W wierszu każdego coina jest nowa kolumna **„Śr. cena zakupu”**. To cena zakupu otwartych pozycji, ważona ilością, która na każdej pozycji **jeszcze została**:
+  - po sprzedaży części pozycji jej waga maleje;
+  - po zamknięciu pozycji przestaje się liczyć;
+  - średnia przelicza się sama przy każdej zmianie.
+
+  Przykład: 1 BTC po 40 000 i 1 BTC po 60 000 daje średnią 50 000. Po sprzedaży 0,5 z tańszej pozycji średnia wynosi (40 000×0,5 + 60 000×1) / 1,5 = 53 333,33.
+- Pod średnią widać **„z opłatą”**, czyli próg rentowności: koszt otwartej części podzielony przez otwartą ilość. Uwzględnia opłatę pobraną w coinie (kupujesz 1 BTC po 50 000, opłata 0,001 BTC, więc próg wynosi 50 050,05). Pokazuje się tylko wtedy, gdy różni się od średniej.
+- API: każdy coin w `GET /api/portfolios/{id}` ma pola `avg_buy_price` i `break_even_price`. Gdy coin nie ma otwartych pozycji, oba mają wartość `null`.
+- Testy: `server/tests/test_average_price.py` (średnia ważona, aktualizacja po sprzedaży częściowej i całkowitej, próg z opłatą, test przez API). Razem przechodzi 42 testy.
+
+**Repozytorium:** od tej zmiany pracuję na gałęziach w `hmhm2000/myprojectai`. Każda zmiana idzie na osobnej gałęzi `feature/...` z opisanymi commitami i trafia do `master` przez Pull Request. Przy okazji zdjąłem ze śledzenia `.continue/` (lokalna konfiguracja edytora, plik na dysku został) i dodałem go do `.gitignore`.

@@ -46,7 +46,7 @@ export default function CoinRow({ coin, expanded, onToggle, actions, showClosed,
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
-        className="grid w-full grid-cols-2 items-center gap-x-4 gap-y-3 p-4 text-left md:grid-cols-[1.6fr_1fr_1fr_1fr_1.3fr_auto]"
+        className="grid w-full grid-cols-2 items-center gap-x-4 gap-y-3 p-4 text-left md:grid-cols-[1.5fr_1fr_1.1fr_1fr_1fr_1.3fr_auto]"
       >
         <div className="col-span-2 flex items-center gap-3 md:col-span-1">
           <CoinBadge symbol={coin.symbol} />
@@ -74,6 +74,14 @@ export default function CoinRow({ coin, expanded, onToggle, actions, showClosed,
           <div className="text-[11px] text-zinc-500">
             {coin.open_positions} otw.{coin.closed_positions > 0 && ` · ${coin.closed_positions} zamk.`}
           </div>
+        </Cell>
+        <Cell label="Śr. cena zakupu">
+          <span className="num text-zinc-200">{coin.avg_buy_price ? `$${fmtPrice(coin.avg_buy_price)}` : "—"}</span>
+          {coin.break_even_price && coin.break_even_price !== coin.avg_buy_price && (
+            <div className="num text-[11px] text-zinc-500" title="Koszt otwartej części / ilość - z opłatą pobraną w coinie">
+              z opłatą ${fmtPrice(coin.break_even_price)}
+            </div>
+          )}
         </Cell>
         <Cell label="Wartość">
           <span className="num text-zinc-100">{fmtMoney(coin.value)}</span>
