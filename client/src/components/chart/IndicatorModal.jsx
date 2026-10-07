@@ -3,8 +3,8 @@ import { errorMessage } from "../../api/client";
 import { hasTranslation, t } from "../../i18n";
 import Modal from "../Modal";
 import { Field } from "../ui";
+import { intervalLabel, intervalOptions } from "../../lib/intervals";
 
-const CHART_INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"];
 const SOURCES = ["close", "open", "high", "low", "hl2", "hlc3", "ohlc4"];
 const paramLabel = (name) => (hasTranslation(`chart.params.${name}`) ? t(`chart.params.${name}`) : name);
 const defaults = (def) => Object.fromEntries(def.params.map((p) => [p.name, p.default]));
@@ -76,7 +76,7 @@ export default function IndicatorModal({ definitions, item = null, onSave, onRes
           <Field label={t("chart.indicators.interval")} htmlFor="ind-interval" hint={t("chart.indicators.intervalHint")}>
             <select id="ind-interval" className="w-full" value={interval} onChange={(e) => setInterval(e.target.value)}>
               <option value="">{t("chart.indicators.followChart")}</option>
-              {CHART_INTERVALS.map((i) => <option key={i} value={i}>{t(`chart.intervals.${i}`)}</option>)}
+              {intervalOptions(interval).map((i) => <option key={i} value={i}>{intervalLabel(i)}</option>)}
             </select>
           </Field>
         </div>

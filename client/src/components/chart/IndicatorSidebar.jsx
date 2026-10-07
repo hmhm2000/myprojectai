@@ -2,6 +2,7 @@ import { useState } from "react";
 import { t } from "../../i18n";
 import { EditIcon, EyeIcon, PlusIcon, TrashIcon } from "../icons";
 import IndicatorModal from "./IndicatorModal";
+import { intervalLabel } from "../../lib/intervals";
 
 /** "SMA 100", "BB 20, 2", "RSI 14 (hl2)" - the most important settings of an indicator. */
 function summary(def, params) {
@@ -47,8 +48,8 @@ export default function IndicatorSidebar({ definitions, items, chartInterval, ap
                 <div className="truncate text-sm font-medium text-zinc-100">{summary(def, item.params)}</div>
                 <div className="text-[11px] text-zinc-500">
                   {item.interval
-                    ? t("chart.indicators.ownInterval", { interval: t(`chart.intervals.${item.interval}`) })
-                    : t("chart.indicators.chartInterval", { interval: t(`chart.intervals.${chartInterval}`) })}
+                    ? t("chart.indicators.ownInterval", { interval: intervalLabel(item.interval) })
+                    : t("chart.indicators.chartInterval", { interval: intervalLabel(chartInterval) })}
                 </div>
               </div>
               <div className="flex shrink-0 gap-0.5">
