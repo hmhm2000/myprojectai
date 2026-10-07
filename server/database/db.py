@@ -13,7 +13,7 @@ engine = create_engine(
 if _is_sqlite:
     @event.listens_for(engine, "connect")
     def _enable_sqlite_foreign_keys(dbapi_connection, _record):
-        # SQLite domyślnie ignoruje klucze obce (i ON DELETE CASCADE).
+        # SQLite ignores foreign keys (and ON DELETE CASCADE) unless explicitly enabled.
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()

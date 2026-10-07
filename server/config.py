@@ -1,4 +1,4 @@
-"""Ustawienia aplikacji wczytywane z server/.env (wzór: server/.env.example)."""
+"""Application settings loaded from server/.env (template: server/.env.example)."""
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,13 +34,13 @@ class Settings:
     database_url: str
     cors_origins: list[str]
 
-    # Rejestracja wyłączona = działa tylko konto główne (admin) z ADMIN_USERNAME.
+    # Registration disabled = only the main (admin) account from ADMIN_USERNAME can log in.
     allow_registration: bool
     admin_username: str
     admin_email: str
     admin_password: str
 
-    # Ceny
+    # Prices
     quote_currency: str
     price_ttl_seconds: int
     price_force_min_interval_seconds: int
@@ -51,7 +51,7 @@ class Settings:
 def _load() -> Settings:
     secret_key = os.getenv("SECRET_KEY", "")
     if not secret_key:
-        raise RuntimeError("Brak SECRET_KEY w server/.env (zobacz server/.env.example)")
+        raise RuntimeError("SECRET_KEY is missing in server/.env (see server/.env.example)")
 
     default_db = f"sqlite:///{(BASE_DIR / 'db' / 'database.db').as_posix()}"
 

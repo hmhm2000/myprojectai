@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-# Osobna baza i ustawienia testowe - muszą być ustawione przed importem config.
+# Separate database and test settings - must be set before config is imported.
 _tmp_dir = tempfile.mkdtemp(prefix="wallet_tests_")
 os.environ["DATABASE_URL"] = f"sqlite:///{Path(_tmp_dir, 'test.db').as_posix()}"
 os.environ["SECRET_KEY"] = "test-secret"
@@ -26,7 +26,7 @@ def fresh_db():
     yield
 
 
-# Moduły, które importują globalny price_service - w testach podmieniamy go na fałszywy.
+# Modules that import the global price_service - replaced with a fake one in tests.
 PRICE_SERVICE_USERS = ["main", "api.routes.prices", "api.routes.portfolios"]
 
 
@@ -51,7 +51,7 @@ def client(fake_prices):
     from fastapi.testclient import TestClient
     from main import app
 
-    with TestClient(app) as test_client:  # uruchamia lifespan (tworzy konto admina)
+    with TestClient(app) as test_client:  # runs the lifespan (creates the admin account)
         yield test_client
 
 

@@ -37,7 +37,7 @@ def test_registration_when_enabled(client, monkeypatch):
     assert me["username"] == "kowalski"
     assert me["is_admin"] is False
 
-    # Zwykły użytkownik nie ma dostępu do listy użytkowników.
+    # A regular user has no access to the user list.
     assert client.get("/api/users/", headers=headers).status_code == 403
 
 

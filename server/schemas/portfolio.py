@@ -3,6 +3,7 @@ from decimal import Decimal
 from typing import Annotated, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
+from pydantic_core import PydanticCustomError
 
 from schemas.common import Amount
 
@@ -12,14 +13,17 @@ PositiveAmount = Annotated[Decimal, Field(gt=0, max_digits=38, decimal_places=18
 NonNegativeAmount = Annotated[Decimal, Field(ge=0, max_digits=38, decimal_places=18)]
 
 
+# Custom validation errors use PydanticCustomError: the error "type" (e.g. "invalid_symbol")
+# is the code the frontend translates (errors.validation.<type> in the locale files).
+
 def normalize_symbol(value: str) -> str:
     symbol = value.strip().upper()
     if not symbol or len(symbol) > 20 or not symbol.isalnum() or not symbol.isascii():
-        raise ValueError("Symbol coina: same litery/cyfry, np. BTC")
+        raise PydanticCustomError("invalid_symbol", "Coin symbol must contain only letters/digits, e.g. BTC")
     return symbol
 
 
-# ------------------------------------------------------------------ wejście
+# ------------------------------------------------------------------ input
 
 class PortfolioIn(BaseModel):
     name: Name
@@ -38,7 +42,7 @@ class PositionIn(BaseModel):
     @model_validator(mode="after")
     def fee_lower_than_quantity(self):
         if self.fee_coin >= self.quantity:
-            raise ValueError("Opłata musi być mniejsza niż kupiona ilość")
+            raise PydanticCustomError("fee_not_below_quantity", "Fee must be lower than the bought quantity")
         return self
 
 
@@ -48,10 +52,10 @@ class SaleAllocationIn(BaseModel):
 
 
 class SaleIn(BaseModel):
-    """Jedna sprzedaż, rozdzielona na jedną lub kilka pozycji tego samego coina."""
+    """One sale, split across one or more positions of the same coin."""
 
     price: PositiveAmount
-    fee_quote: NonNegativeAmount = Decimal(0)   # łączna opłata za całą sprzedaż (USDT)
+    fee_quote: NonNegativeAmount = Decimal(0)   # total fee for the whole sale (USDT)
     sold_at: datetime
     note: Note = None
     allocations: list[SaleAllocationIn] = Field(min_length=1, max_length=100)
@@ -60,17 +64,17 @@ class SaleIn(BaseModel):
     def unique_positions(self):
         ids = [a.position_id for a in self.allocations]
         if len(ids) != len(set(ids)):
-            raise ValueError("Każda pozycja może wystąpić w sprzedaży tylko raz")
+            raise PydanticCustomError("duplicate_position", "Each position can appear only once in a sale")
         return self
 
 
 class PositionOrderIn(BaseModel):
-    """Nowa kolejność pozycji (np. jednego coina) - lista id od góry do dołu."""
+    """New order of positions (e.g. of one coin) - list of ids from top to bottom."""
 
     position_ids: list[int] = Field(min_length=1, max_length=1000)
 
 
-# ------------------------------------------------------------------ wyjście
+# ------------------------------------------------------------------ output
 
 class SaleOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -116,13 +120,13 @@ class PriceInfo(BaseModel):
 
 
 class GroupOut(BaseModel):
-    invested: Amount                    # koszt otwartej części
-    total_cost: Amount                  # koszt wszystkich pozycji (też zamkniętych)
+    invested: Amount                    # cost of the open part
+    total_cost: Amount                  # cost of all positions (closed ones too)
     value: Optional[Amount]
-    unrealized_pnl: Optional[Amount]    # zysk tylko z otwartych pozycji
+    unrealized_pnl: Optional[Amount]    # profit of open positions only
     unrealized_pnl_pct: Optional[Amount]
     realized_pnl: Amount
-    total_pnl: Optional[Amount]         # zysk ogólny (zrealizowany + otwarte)
+    total_pnl: Optional[Amount]         # overall profit (realized + open)
     total_pnl_pct: Optional[Amount]
 
 
@@ -130,8 +134,8 @@ class CoinOut(GroupOut):
     symbol: str
     price: Optional[PriceInfo]
     open_quantity: Amount
-    avg_buy_price: Optional[Amount]       # średnia cena zakupu otwartych pozycji
-    break_even_price: Optional[Amount]    # próg rentowności (z opłatą w coinie)
+    avg_buy_price: Optional[Amount]       # average buy price of open positions
+    break_even_price: Optional[Amount]    # break-even price (including fee in coin)
     missing_price: bool
     open_positions: int
     closed_positions: int

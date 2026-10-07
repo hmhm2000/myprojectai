@@ -16,7 +16,7 @@ def test_get_prices_uses_cache(client, fake_prices):
     calls = fake_prices.okx.calls
     client.get("/api/prices", headers=headers)
     client.get("/api/prices?symbols=btc,spx", headers=headers)
-    assert fake_prices.okx.calls == calls  # bez nowych zapytań do giełdy
+    assert fake_prices.okx.calls == calls  # no new exchange requests
 
 
 def test_symbols_filter(client):
@@ -34,5 +34,6 @@ def test_force_refresh_limit(client, fake_prices):
 
     second = client.post("/api/prices/refresh", headers=headers)
     assert second.status_code == 429
-    assert second.json()["retry_after"] == 10
+    assert second.json()["code"] == "prices.refresh_too_soon"
+    assert second.json()["params"]["retry_after"] == 10
     assert second.headers["Retry-After"] == "10"

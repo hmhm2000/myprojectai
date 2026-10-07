@@ -1,13 +1,14 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from config import settings
+from core.errors import AppError
 from database.db import SessionLocal, get_db
 from models.user import User
 from schemas.user import AuthConfig, Token, UserCreate, UserResponse
@@ -36,9 +37,8 @@ def create_access_token(username: str) -> str:
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid token",
+    credentials_exception = AppError(
+        status.HTTP_401_UNAUTHORIZED, "auth.invalid_token", "Invalid or expired token",
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
@@ -56,12 +56,12 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 def get_current_admin_user(current_user: User = Depends(get_current_user)) -> User:
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Insufficient admin privileges")
+        raise AppError(403, "auth.admin_required", "Insufficient admin privileges")
     return current_user
 
 
 def ensure_admin_account() -> None:
-    """Konto główne z .env: tworzy je, jeśli nie istnieje, albo nadaje mu uprawnienia admina."""
+    """Main account from .env: create it if missing, or grant admin rights to an existing user."""
     username = settings.admin_username
     if not username:
         return
@@ -71,10 +71,10 @@ def ensure_admin_account() -> None:
             if not user.is_admin:
                 user.is_admin = True
                 db.commit()
-                logger.info("Użytkownik %s otrzymał uprawnienia admina (ADMIN_USERNAME)", username)
+                logger.info("User %s granted admin rights (ADMIN_USERNAME)", username)
             return
         if not settings.admin_password:
-            logger.warning("Brak konta %s i pustego ADMIN_PASSWORD w .env - konto główne nie zostało utworzone", username)
+            logger.warning("Account %s does not exist and ADMIN_PASSWORD is empty - main account not created", username)
             return
         db.add(User(
             username=username,
@@ -83,7 +83,7 @@ def ensure_admin_account() -> None:
             is_admin=True,
         ))
         db.commit()
-        logger.info("Utworzono konto główne: %s", username)
+        logger.info("Main account created: %s", username)
 
 
 @router.get("/config", response_model=AuthConfig)
@@ -94,12 +94,12 @@ def get_auth_config():
 @router.post("/register", response_model=Token)
 def register_user(user: UserCreate, db: Session = Depends(get_db)):
     if not settings.allow_registration:
-        raise HTTPException(status_code=403, detail="Rejestracja jest wyłączona")
+        raise AppError(403, "auth.registration_disabled", "Registration is disabled")
     existing_user = db.query(User).filter(
         (User.username == user.username) | (User.email == user.email)
     ).first()
     if existing_user:
-        raise HTTPException(status_code=400, detail="Użytkownik lub e-mail już istnieje")
+        raise AppError(400, "auth.user_exists", "Username or e-mail already exists")
     db_user = User(
         username=user.username,
         email=user.email,
@@ -108,7 +108,7 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
     )
     db.add(db_user)
     db.commit()
-    logger.info("Zarejestrowano użytkownika %s (ID: %s)", db_user.username, db_user.id)
+    logger.info("User registered: %s (ID: %s)", db_user.username, db_user.id)
     return Token(access_token=create_access_token(db_user.username), token_type="bearer")
 
 
@@ -116,8 +116,8 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
 def login_user(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == form_data.username).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
-        logger.warning("Nieudane logowanie: %s", form_data.username)
-        raise HTTPException(status_code=401, detail="Nieprawidłowe dane logowania")
+        logger.warning("Failed login attempt: %s", form_data.username)
+        raise AppError(401, "auth.invalid_credentials", "Invalid username or password")
     return Token(access_token=create_access_token(user.username), token_type="bearer")
 
 

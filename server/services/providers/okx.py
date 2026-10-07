@@ -1,6 +1,6 @@
-"""OKX: GET /api/v5/market/tickers?instType=SPOT (publiczny, bez klucza API).
+"""OKX: GET /api/v5/market/tickers?instType=SPOT (public, no API key).
 
-Jedno zapytanie zwraca wszystkie pary spot. Format pary: "BTC-USDT".
+One request returns all spot pairs. Pair format: "BTC-USDT".
 """
 from services.providers.base import ProviderError, Ticker, change_pct, get_json, to_decimal
 
@@ -13,7 +13,7 @@ class OkxProvider:
     def fetch_tickers(self, quote: str, timeout: float) -> dict[str, Ticker]:
         payload = get_json(TICKERS_URL, {"instType": "SPOT"}, timeout, "OKX")
         if str(payload.get("code")) != "0":
-            raise ProviderError(f"OKX: błąd API {payload.get('code')}: {payload.get('msg')}")
+            raise ProviderError("api_error", f"OKX: API error {payload.get('code')}: {payload.get('msg')}")
         return parse_tickers(payload.get("data") or [], quote)
 
 

@@ -85,7 +85,7 @@ def test_sale_rules_and_new_position_after_close(client):
     assert closed["realized_pnl"] == "19930.00000000"
     assert closed["total_pnl_pct"] == "39.86"
 
-    # Nowy zakup po wyzerowaniu stanu = nowa, osobna pozycja (na końcu kolejności).
+    # A new purchase after closing = a new, separate position (appended at the end).
     view = add_position(client, headers, portfolio["id"], buy_price="65000", fee_coin="0", bought_at="2026-09-20")
     btc = view["coins"][0]
     assert btc["open_positions"] == 1 and btc["closed_positions"] == 1
@@ -94,11 +94,11 @@ def test_sale_rules_and_new_position_after_close(client):
     assert new_position["total_pnl"] == "-5000.00000000"
     assert btc["realized_pnl"] == "19930.00000000"
     assert btc["unrealized_pnl"] == "-5000.00000000"
-    assert btc["total_pnl"] == "14930.00000000"            # zysk ogólny
+    assert btc["total_pnl"] == "14930.00000000"            # overall profit
     assert btc["total_cost"] == "115000.00000000"
     assert btc["total_pnl_pct"] == "12.98"
 
-    # Usunięcie sprzedaży otwiera pozycję ponownie.
+    # Deleting the sale reopens the position.
     group_id = closed["sales"][0]["group_id"]
     view = client.delete(f"/api/sale-groups/{group_id}", headers=headers).json()
     assert view["coins"][0]["open_positions"] == 2
@@ -111,21 +111,21 @@ def test_sale_from_several_positions(client):
         view = add_position(client, headers, portfolio["id"], buy_price=price, fee_coin="0", bought_at=f"2026-09-{day}")
     long_term, short_a, short_b = [p["id"] for p in positions_of(view)]
 
-    # Sprzedaję 1,5 BTC tylko z dwóch "krótkich" pozycji - najstarsza zostaje nietknięta.
+    # Sell 1.5 BTC from the two "short-term" positions only - the oldest stays untouched.
     view = sell(client, headers, portfolio["id"], [(short_a, "1"), (short_b, "0.5")], price="70000", fee="105").json()
     by_id = {p["id"]: p for p in positions_of(view)}
     assert by_id[long_term]["sales"] == []
     assert by_id[short_a]["is_closed"] is True
     assert by_id[short_b]["open_quantity"] == "0.5"
 
-    # Opłata rozdzielona proporcjonalnie do ilości (1 : 0,5), ta sama grupa.
+    # Fee split proportionally to quantity (1 : 0.5), same group.
     sale_a, sale_b = by_id[short_a]["sales"][0], by_id[short_b]["sales"][0]
     assert sale_a["group_id"] == sale_b["group_id"]
     assert (sale_a["fee_quote"], sale_b["fee_quote"]) == ("70", "35")
     assert by_id[short_a]["realized_pnl"] == "19930.00000000"      # 70 000 - 70 - 50 000
     assert by_id[short_b]["realized_pnl"] == "4965.00000000"       # 35 000 - 35 - 30 000
 
-    # Edycja całej sprzedaży: inny podział, ten sam group_id.
+    # Edit the whole sale: different split, same group_id.
     group_id = sale_a["group_id"]
     body = {"price": "70000", "fee_quote": "0", "sold_at": "2026-09-10",
             "allocations": [{"position_id": short_b, "quantity": "1"}]}
@@ -135,7 +135,7 @@ def test_sale_from_several_positions(client):
     assert by_id[short_b]["is_closed"] is True
     assert by_id[short_b]["sales"][0]["group_id"] == group_id
 
-    # Edycja nie może przekroczyć ilości (liczonej bez starej wersji tej sprzedaży).
+    # Editing cannot exceed the quantity (computed without the old version of this sale).
     body["allocations"] = [{"position_id": short_b, "quantity": "1.1"}]
     assert client.put(f"/api/sale-groups/{group_id}", json=body, headers=headers).status_code == 400
 
@@ -152,7 +152,7 @@ def test_sale_validation(client):
     eth_id = positions_of(view, "ETH")[0]["id"]
 
     mixed = sell(client, headers, portfolio["id"], [(btc_id, "0.1"), (eth_id, "0.1")])
-    assert mixed.status_code == 400 and "jednego coina" in mixed.json()["detail"]
+    assert mixed.status_code == 400 and mixed.json()["code"] == "sale.mixed_coins"
     assert sell(client, headers, portfolio["id"], [(btc_id, "0.1"), (btc_id, "0.1")]).status_code == 422
     assert sell(client, headers, portfolio["id"], []).status_code == 422
 
@@ -188,7 +188,7 @@ def test_update_and_delete_position(client):
     sell(client, headers, portfolio["id"], [(position_id, "0.6")])
 
     body = {"symbol": "BTC", "buy_price": "48000", "quantity": "0.5", "fee_coin": "0", "bought_at": "2026-09-01"}
-    assert client.put(f"/api/positions/{position_id}", json=body, headers=headers).status_code == 400  # < sprzedane
+    assert client.put(f"/api/positions/{position_id}", json=body, headers=headers).status_code == 400  # < already sold
 
     body["quantity"] = "0.8"
     view = client.put(f"/api/positions/{position_id}", json=body, headers=headers).json()
