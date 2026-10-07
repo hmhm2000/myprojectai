@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 import models  # noqa: F401  (registers all models)
-from api.routes import alerts, candles, chart_indicators, favorites, indicators, journal, portfolios, prices, users
+from api.routes import alerts, candles, chart_indicators, chart_intervals, favorites, indicators, journal, portfolios, prices, users
 from auth import ensure_admin_account, router as auth_router
 from config import settings
 from core.errors import AppError, app_error_handler
@@ -53,6 +53,7 @@ app.include_router(journal.router)
 app.include_router(candles.router)
 app.include_router(indicators.router)
 app.include_router(chart_indicators.router)
+app.include_router(chart_intervals.router)
 app.include_router(alerts.router)
 
 

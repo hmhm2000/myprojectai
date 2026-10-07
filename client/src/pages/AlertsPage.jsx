@@ -7,6 +7,7 @@ import { hasTranslation, t } from "../i18n";
 import { conditionText, operandLabel } from "../lib/alertText";
 import { fmtDateTime, fmtPrice } from "../lib/format";
 import { intervalLabel, intervalOptions } from "../lib/intervals";
+import { useChartIntervals } from "../lib/useChartIntervals";
 
 const OPERATORS = [">", "<", ">=", "<=", "==", "crosses_above", "crosses_below"];
 const SOURCES = ["close", "open", "high", "low", "hl2", "hlc3", "ohlc4"];
@@ -74,6 +75,7 @@ function NewAlertForm({ definitions, onCreated }) {
   });
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [intervals] = useChartIntervals();
   const set = (changes) => setForm((f) => ({ ...f, ...changes }));
 
   const toApi = (operand) => {
@@ -111,7 +113,7 @@ function NewAlertForm({ definitions, onCreated }) {
         <label>
           <span className="label">{t("alerts.form.interval")}</span>
           <select value={form.interval} onChange={(e) => set({ interval: e.target.value })} className="text-sm">
-            {intervalOptions(form.interval).map((i) => <option key={i} value={i}>{intervalLabel(i)}</option>)}
+            {intervalOptions(intervals, form.interval).map((i) => <option key={i} value={i}>{intervalLabel(i)}</option>)}
           </select>
         </label>
       </div>

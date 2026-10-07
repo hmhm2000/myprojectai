@@ -6,7 +6,7 @@ export const PRESET_INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w
 
 const UNIT_SECONDS = { m: 60, h: 3600, d: 86400, w: 604800, M: 2629800 };
 const MAX_SECONDS = 366 * 86400;
-const CUSTOM_KEY = "chart:customIntervals";
+const LEGACY_CUSTOM_KEY = "chart:customIntervals"; // old browser-only list, moved to the server once
 
 /** "3D" -> "3d", "2W" -> "2w", "1M" -> "1M" (month), "15m" -> "15m"; null when invalid. */
 export function parseInterval(input) {
@@ -24,35 +24,19 @@ export function intervalLabel(name) {
   return match ? `${match[1]}${t(`chart.units.${match[2]}`)}` : String(name ?? "");
 }
 
-/** Custom intervals the user typed before (remembered in the browser). */
-export function customIntervals() {
-  try {
-    return (JSON.parse(localStorage.getItem(CUSTOM_KEY)) ?? []).filter((i) => parseInterval(i) && !PRESET_INTERVALS.includes(i));
-  } catch {
-    return [];
-  }
-}
-
-/** Options for interval selects: presets, remembered custom ones and `current` (when it is neither). */
-export function intervalOptions(current) {
-  const list = [...PRESET_INTERVALS, ...customIntervals()];
+/** Interval names for selects: the user's list (presets + custom, from the server) plus `current`. */
+export function intervalOptions(intervals, current) {
+  const list = intervals?.length ? intervals.map((i) => i.name) : PRESET_INTERVALS;
   return current && !list.includes(current) ? [...list, current] : list;
 }
 
-export function rememberCustomInterval(name) {
-  if (PRESET_INTERVALS.includes(name)) return;
-  const list = [name, ...customIntervals().filter((i) => i !== name)].slice(0, 8);
+/** Custom intervals saved by the old browser-only version; removed from the browser when read. */
+export function takeLegacyCustomIntervals() {
   try {
-    localStorage.setItem(CUSTOM_KEY, JSON.stringify(list));
+    const list = JSON.parse(localStorage.getItem(LEGACY_CUSTOM_KEY)) ?? [];
+    localStorage.removeItem(LEGACY_CUSTOM_KEY);
+    return list.filter((i) => parseInterval(i));
   } catch {
-    // storage unavailable - the interval still works, it just isn't remembered
-  }
-}
-
-export function forgetCustomInterval(name) {
-  try {
-    localStorage.setItem(CUSTOM_KEY, JSON.stringify(customIntervals().filter((i) => i !== name)));
-  } catch {
-    // ignore
+    return [];
   }
 }

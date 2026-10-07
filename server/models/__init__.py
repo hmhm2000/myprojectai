@@ -4,3 +4,4 @@ from models.portfolio import Portfolio, Position, Sale  # noqa: F401
 from models.favorites import FavoriteList, FavoriteCoin  # noqa: F401
 from models.alerts import Alert, AlertEvent  # noqa: F401
 from models.chart_indicators import ChartIndicator  # noqa: F401
+from models.chart_intervals import ChartInterval  # noqa: F401

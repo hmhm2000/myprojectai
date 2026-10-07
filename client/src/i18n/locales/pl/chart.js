@@ -47,12 +47,16 @@ export default {
   },
   // Jednostki interwałów w etykietach ("4h", "3D", "2W", "1M"); m = minuty, M = miesiące.
   units: { m: "m", h: "h", d: "D", w: "W", M: "M" },
-  // Własny interwał wpisywany obok przycisków.
+  // Menu interwałów (strzałka obok przycisków): przypinanie i własne interwały.
   customInterval: {
+    menu: "Wszystkie interwały",
+    menuHint: "Zaznaczone są widoczne jako przyciski nad wykresem.",
+    pin: "Pokaż jako przycisk",
+    own: "własny",
     placeholder: "np. 3D",
     hint: "Własny interwał: liczba + jednostka (m, h, D, W, M), np. 3D, 2W, 2h, 3M. M = miesiąc, m = minuta.",
     add: "Dodaj",
     invalid: "Nieprawidłowy interwał (np. 3D, 2W, 45m; maks. 1 rok).",
-    remove: "Usuń z listy",
+    remove: "Usuń interwał",
   },
 };
