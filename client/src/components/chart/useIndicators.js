@@ -7,7 +7,7 @@ const TAIL_STEPS = 5; // on refresh only the newest candles are recomputed
 /**
  * Draws backend-computed indicators on a CandleChart.
  * - `api` comes from CandleChart's onReady (a new chart for every symbol/interval),
- * - `active`: [{ uid, id, params }], `definitions`: list from GET /api/indicators,
+ * - `active`: [{ uid, id, params, interval }] (interval = own timeframe or null), `definitions`: GET /api/indicators,
  * - returns `onBarsChange` to pass to CandleChart: fetches only what changed (older history or the tail).
  */
 export function useIndicators(api, active, definitions, symbol, interval) {
@@ -34,7 +34,9 @@ export function useIndicators(api, active, definitions, symbol, interval) {
   }, [api]);
 
   const fetchInto = useCallback(async (layer, start, end) => {
-    const result = await indicatorsApi.values(layer.id, { symbol, interval, start, end, params: layer.params });
+    const result = await indicatorsApi.values(layer.id, {
+      symbol, interval, start, end, params: layer.params, indicatorInterval: layer.interval !== interval ? layer.interval : null,
+    });
     result.time.forEach((unix, i) => {
       for (const [name, values] of Object.entries(result.outputs)) {
         if (!layer.values.has(name)) layer.values.set(name, new Map());
@@ -55,7 +57,7 @@ export function useIndicators(api, active, definitions, symbol, interval) {
 
     let pane = 0;
     layers.current = active
-      .map(({ uid, id, params }) => {
+      .map(({ uid, id, params, interval: ownInterval }) => {
         const def = definitions.find((d) => d.id === id);
         if (!def) return null;
         const paneIndex = def.pane === "overlay" ? 0 : ++pane;
@@ -68,7 +70,7 @@ export function useIndicators(api, active, definitions, symbol, interval) {
         });
         const firstSeries = series[def.outputs[0].name];
         def.levels.forEach((price) => firstSeries.createPriceLine({ price, color: "rgba(161,161,170,0.4)", lineStyle: 2, lineWidth: 1, axisLabelVisible: false }));
-        return { uid, id, def, params, series, values: new Map() };
+        return { uid, id, def, params, interval: ownInterval ?? null, series, values: new Map() };
       })
       .filter(Boolean);
 

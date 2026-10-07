@@ -16,9 +16,22 @@ export default {
   },
   // Wskaźniki na wykresie (liczone na serwerze).
   indicators: {
-    add: "+ Wskaźnik",
-    confirm: "Dodaj",
-    remove: "Usuń wskaźnik",
+    title: "Wskaźniki",
+    add: "Dodaj",
+    addTitle: "Nowy wskaźnik",
+    editTitle: "Ustawienia: {{name}}",
+    empty: "Brak wskaźników. Dodaj np. SMA, RSI albo Bollinger Bands.",
+    indicator: "Wskaźnik",
+    interval: "Interwał wskaźnika",
+    intervalHint: "Np. SMA 100 z 1D na wykresie 1H. Historia pokazuje tylko zamknięte świece tego interwału.",
+    followChart: "Jak wykres",
+    ownInterval: "liczony z {{interval}}",
+    chartInterval: "jak wykres ({{interval}})",
+    edit: "Edytuj",
+    hide: "Ukryj",
+    show: "Pokaż",
+    remove: "Usuń",
+    reset: "Przywróć domyślne",
   },
   // Nazwy parametrów wskaźników (klucze z backendu).
   params: {

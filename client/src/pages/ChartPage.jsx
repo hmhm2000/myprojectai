@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import CoinPicker from "../components/CoinPicker";
 import CandleChart from "../components/chart/CandleChart";
-import IndicatorPanel from "../components/chart/IndicatorPanel";
+import IndicatorSidebar from "../components/chart/IndicatorSidebar";
 import { useIndicators } from "../components/chart/useIndicators";
-import { indicatorsApi } from "../api/endpoints";
+import { chartIndicatorsApi, indicatorsApi } from "../api/endpoints";
 import { Pnl } from "../components/ui";
 import { t } from "../i18n";
 import { fmtDateTime, fmtQty, fmtUnitPrice } from "../lib/format";
@@ -13,12 +13,12 @@ import { portfoliosApi } from "../api/endpoints";
 import { EyeIcon } from "../components/icons";
 
 const INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"];
-const INDICATORS_KEY = "chart:indicators";
+const LEGACY_INDICATORS_KEY = "chart:indicators"; // old browser-only list, imported once to the server
 const SHOW_TRADES_KEY = "chart:showTrades";
 
-function readActive() {
+function readLegacy() {
   try {
-    return JSON.parse(localStorage.getItem(INDICATORS_KEY)) ?? [];
+    return JSON.parse(localStorage.getItem(LEGACY_INDICATORS_KEY)) ?? [];
   } catch {
     return [];
   }
@@ -98,17 +98,35 @@ export default function ChartPage() {
   const [focusTime, setFocusTime] = useState(null);
   const [chartApi, setChartApi] = useState(null);
   const [definitions, setDefinitions] = useState([]);
-  const [activeIndicators, setActiveIndicators] = useState(readActive);
+  const [savedIndicators, setSavedIndicators] = useState([]);
   const [showTrades, setShowTrades] = useState(() => localStorage.getItem(SHOW_TRADES_KEY) !== "false");
+  // Visible saved indicators in the shape useIndicators expects.
+  const activeIndicators = useMemo(
+    () => savedIndicators.filter((i) => i.visible)
+      .map((i) => ({ uid: `${i.id}-${i.interval}-${JSON.stringify(i.params)}`, id: i.indicator_id, params: i.params, interval: i.interval })),
+    [savedIndicators],
+  );
   const onBarsChange = useIndicators(chartApi, activeIndicators, definitions, symbol, interval);
+
+  const loadIndicators = useCallback(() => chartIndicatorsApi.list().then(setSavedIndicators).catch(() => {}), []);
 
   useEffect(() => {
     indicatorsApi.list().then(setDefinitions).catch(() => {});
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(INDICATORS_KEY, JSON.stringify(activeIndicators));
-  }, [activeIndicators]);
+    // Read and remove the old browser-only list synchronously, so it is imported only once
+    // (effects can run twice in development).
+    const legacy = readLegacy();
+    localStorage.removeItem(LEGACY_INDICATORS_KEY);
+    (async () => {
+      const saved = await chartIndicatorsApi.list().catch(() => null);
+      if (saved && saved.length === 0 && legacy.length) {
+        for (const item of legacy) await chartIndicatorsApi.add({ indicator_id: item.id, params: item.params }).catch(() => {});
+      }
+      loadIndicators();
+    })();
+  }, [loadIndicators]);
 
   useEffect(() => {
     localStorage.setItem(SHOW_TRADES_KEY, String(showTrades));
@@ -164,15 +182,15 @@ export default function ChartPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-4">
-        <IndicatorPanel definitions={definitions} active={activeIndicators} onChange={setActiveIndicators} />
-        <label className="flex items-center gap-2 text-xs text-zinc-400">
-          <input type="checkbox" checked={showTrades} onChange={(e) => setShowTrades(e.target.checked)} />
-          {t("chart.trades.showAll")}
-        </label>
-      </div>
+      <label className="flex items-center gap-2 text-xs text-zinc-400">
+        <input type="checkbox" checked={showTrades} onChange={(e) => setShowTrades(e.target.checked)} />
+        {t("chart.trades.showAll")}
+      </label>
 
-      <div className="tile p-2">
+      <div className="grid gap-3 lg:grid-cols-[16rem_minmax(0,1fr)]">
+      <IndicatorSidebar definitions={definitions} items={savedIndicators} chartInterval={interval}
+        api={chartIndicatorsApi} onChanged={loadIndicators} />
+      <div className="tile min-w-0 p-2">
         <CandleChart
           symbol={symbol}
           interval={interval}
@@ -183,6 +201,7 @@ export default function ChartPage() {
           onBarsChange={onBarsChange}
           extraPanes={activeIndicators.filter((a) => definitions.find((d) => d.id === a.id)?.pane === "separate").length}
         />
+      </div>
       </div>
 
       {selectedEvents.length > 0 && (

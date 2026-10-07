@@ -64,8 +64,19 @@ export const alertsApi = {
 
 export const indicatorsApi = {
   list: () => data(api.get("/api/indicators")),
-  values: (id, { symbol, interval, start, end, params }) =>
-    data(api.get(`/api/indicators/${id}/values`, { params: { symbol, interval, start, end, params: JSON.stringify(params) } })),
+  values: (id, { symbol, interval, start, end, params, indicatorInterval = null }) =>
+    data(api.get(`/api/indicators/${id}/values`, {
+      params: { symbol, interval, start, end, params: JSON.stringify(params), ...(indicatorInterval ? { indicator_interval: indicatorInterval } : {}) },
+    })),
+};
+
+// The user's chart indicators (saved on the server, per user).
+export const chartIndicatorsApi = {
+  list: () => data(api.get("/api/chart-indicators")),
+  add: (body) => data(api.post("/api/chart-indicators", body)),
+  update: (id, body) => data(api.put(`/api/chart-indicators/${id}`, body)),
+  reset: (id) => data(api.post(`/api/chart-indicators/${id}/reset`)),
+  remove: (id) => api.delete(`/api/chart-indicators/${id}`),
 };
 
 export const journalApi = {
