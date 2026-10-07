@@ -117,6 +117,15 @@ export default {
     pnl: "Zysk / strata",
   },
 
+  // Czas trwania pozycji i czas pod/nad ceną wejścia.
+  timing: {
+    openFor: "Otwarta od {{duration}}",
+    heldFor: "Trwała {{duration}}",
+    load: "Czas pod / nad ceną wejścia",
+    below: "pod wejściem {{duration}} ({{pct}})",
+    above: "nad wejściem {{duration}}",
+  },
+
   // Jedna pozycja (zakup) i jej sprzedaże.
   position: {
     date: "Data",

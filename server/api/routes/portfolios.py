@@ -14,15 +14,18 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from auth import get_current_user
+from config import settings
 from core.errors import BadRequest, NotFound
 from database.db import get_db
 from models.portfolio import Portfolio, Position, Sale
 from models.user import User
 from schemas.portfolio import (
-    PortfolioIn, PortfolioListItem, PortfolioOut, PositionIn, PositionOrderIn, SaleIn,
+    PortfolioIn, PortfolioListItem, PortfolioOut, PositionIn, PositionOrderIn, PositionTimingOut, SaleIn,
 )
 from services.pnl import held_quantity, sold_quantity, split_fee
 from services.portfolio_view import build_list_item, build_portfolio
+from services.candle_service import candle_service
+from services.position_timing import position_timing
 from services.price_service import price_service
 
 router = APIRouter(prefix="/api", tags=["portfolios"])
@@ -181,6 +184,12 @@ def update_position(position_id: int, data: PositionIn,
         setattr(position, field, value)
     db.commit()
     return _view(db, position.portfolio)
+
+
+@router.get("/positions/{position_id}/timing", response_model=PositionTimingOut)
+def get_position_timing(position_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Lifetime of the position and time spent below/above the buy price (from exchange candles)."""
+    return position_timing(_get_position(db, position_id, user), candle_service, settings.user_timezone)
 
 
 @router.delete("/positions/{position_id}", response_model=PortfolioOut)

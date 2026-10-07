@@ -34,6 +34,7 @@ export const portfoliosApi = {
   addPosition: (portfolioId, body) => data(api.post(`/api/portfolios/${portfolioId}/positions`, body)),
   updatePosition: (id, body) => data(api.put(`/api/positions/${id}`, body)),
   removePosition: (id) => data(api.delete(`/api/positions/${id}`)),
+  positionTiming: (id) => data(api.get(`/api/positions/${id}/timing`)),
 
   reorderPositions: (portfolioId, positionIds) =>
     data(api.put(`/api/portfolios/${portfolioId}/positions/order`, { position_ids: positionIds })),

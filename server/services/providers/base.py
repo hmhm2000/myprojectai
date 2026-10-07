@@ -68,3 +68,33 @@ def get_json(url: str, params: dict, timeout: float, exchange: str) -> dict:
         return response.json()
     except ValueError as exc:
         raise ProviderError("invalid_response", f"{exchange}: response is not valid JSON") from exc
+
+
+# ------------------------------------------------------------------ candles
+
+# Supported candle intervals -> length in seconds.
+INTERVAL_SECONDS = {
+    "1m": 60, "5m": 300, "15m": 900, "30m": 1800,
+    "1h": 3600, "4h": 14400, "1d": 86400,
+}
+
+
+@dataclass(frozen=True)
+class Candle:
+    time: int          # candle open time, unix seconds (UTC)
+    open: Decimal
+    high: Decimal
+    low: Decimal
+    close: Decimal
+    volume: Decimal    # base coin volume
+
+
+def parse_candle_row(row: list) -> Optional[Candle]:
+    """[ts_ms, open, high, low, close, volume, ...] - the common prefix of OKX and Bybit rows."""
+    try:
+        values = [to_decimal(v) for v in row[1:6]]
+        if any(v is None for v in values):
+            return None
+        return Candle(int(row[0]) // 1000, *values)
+    except (TypeError, ValueError, IndexError):
+        return None

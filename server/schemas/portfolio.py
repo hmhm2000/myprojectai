@@ -197,3 +197,18 @@ class PortfolioListItem(BaseModel):
     created_at: datetime
     positions_count: int
     summary: SummaryOut
+
+
+class PositionTimingOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    start: datetime                   # UTC
+    end: datetime                     # UTC; "now" for open positions
+    is_open: bool
+    duration_seconds: int
+    below_seconds: int                # time with candle close below the buy price
+    above_seconds: int
+    unknown_seconds: int              # part of the lifetime without candles
+    below_pct: Optional[Amount]       # below / (below + above) * 100
+    interval: str                     # candle interval used for the calculation
+    source: Optional[str]

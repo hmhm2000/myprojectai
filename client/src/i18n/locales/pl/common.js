@@ -19,4 +19,10 @@ export default {
   loading: "Ładowanie…",
   name: "Nazwa",
   quoted: "„{{text}}”", // cytat, np. notatka przy pozycji
+  // Jednostki czasu trwania, np. "3 d 4 h".
+  duration: {
+    days: "{{n}} d",
+    hours: "{{n}} h",
+    minutes: "{{n}} min",
+  },
 };

@@ -406,3 +406,19 @@ W `locales/pl/index.js` są też format liczb i dat (`pl-PL`) oraz symbol waluty
 - Pola są zapisane w istniejących tabelach `positions` i `sales`, bez osobnego systemu. Obliczenia FIFO i PnL się nie zmieniły.
 - API: pozycja ma pola `entry_reason`, `tags` (lista), `plan`, `target_price` i `stop_loss`, a sprzedaż ma `exit_reason`.
 - Testy: `server/tests/test_journal.py`.
+
+---
+
+## Etap 11: czas trwania pozycji (pod / nad ceną wejścia)
+
+- Pod każdą pozycją widać **czas trwania**: „Otwarta od …” albo „Trwała …” (od zakupu do ostatniej sprzedaży). Liczy się w przeglądarce, bez zapytań.
+- Przycisk **„Czas pod / nad ceną wejścia”** pobiera świece z giełdy i pokazuje, ile czasu cena była poniżej, a ile powyżej ceny zakupu (z procentem).
+  - Częściowa sprzedaż nie kończy pozycji: liczy się do sprzedaży ostatniej sztuki albo do teraz.
+  - Każda świeca jest oceniana po cenie zamknięcia. Interwał dobiera się sam (od 1m do 1d), tak żeby wyszło najwyżej ok. 1000 świec, więc dokładność to mniej więcej jedna świeca.
+  - Nic nie jest zapisywane w bazie. Wyniki dla zamkniętych pozycji serwer pamięta, bo się nie zmieniają.
+- **Świece (OHLCV):** nowy wspólny serwis `server/services/candle_service.py`, z którego skorzysta też wykres.
+  - Źródło: Bybit, jeśli ma parę (1000 świec na zapytanie), w przeciwnym razie OKX. Przy awarii jednej giełdy serwis próbuje drugiej.
+  - Cache: zakresy sięgające „teraz” przez 30 s, historyczne trwale (w pamięci).
+- **Strefa czasowa:** daty z formularzy są zapisywane jako czas lokalny. Do porównania ze świecami (UTC) służy nowe ustawienie `USER_TIMEZONE` w `server/.env` (domyślnie `Europe/Warsaw`). Doszedł pakiet `tzdata` (Windows nie ma wbudowanej bazy stref).
+- API: `GET /api/positions/{id}/timing` zwraca `duration_seconds`, `below_seconds`, `above_seconds`, `unknown_seconds`, `below_pct`, `interval` i `source`.
+- Testy: `server/tests/test_position_timing.py`.

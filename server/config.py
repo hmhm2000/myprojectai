@@ -47,6 +47,9 @@ class Settings:
     price_error_backoff_seconds: int
     price_http_timeout_seconds: int
 
+    # Time zone of dates entered in the UI (bought_at/sold_at are stored as local time).
+    user_timezone: str
+
 
 def _load() -> Settings:
     secret_key = os.getenv("SECRET_KEY", "")
@@ -69,6 +72,7 @@ def _load() -> Settings:
         price_force_min_interval_seconds=_int("PRICE_FORCE_MIN_INTERVAL_SECONDS", 10),
         price_error_backoff_seconds=_int("PRICE_ERROR_BACKOFF_SECONDS", 30),
         price_http_timeout_seconds=_int("PRICE_HTTP_TIMEOUT_SECONDS", 10),
+        user_timezone=os.getenv("USER_TIMEZONE", "Europe/Warsaw").strip(),
     )
 
 

@@ -37,6 +37,11 @@ export default {
       coin_exists: "{{symbol}} już jest na tej liście",
       coin_not_found: "Tego coina nie ma na liście",
     },
+    candles: {
+      symbol_not_found: "Brak świec dla {{symbol}} na OKX/Bybit",
+      invalid_interval: "Nieobsługiwany interwał: {{interval}}",
+      unavailable: "Nie udało się pobrać świec z giełdy",
+    },
     prices: {
       refresh_too_soon: "Odczekaj {{retry_after}} s przed kolejnym odświeżeniem",
     },

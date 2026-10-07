@@ -1,6 +1,6 @@
 // The backend calculates everything in Decimal and returns amounts as strings.
 // This module only formats them for display (locale and currency symbol come from i18n).
-import { CURRENCY_SYMBOL, LOCALE_TAG as LOCALE } from "../i18n";
+import { CURRENCY_SYMBOL, LOCALE_TAG as LOCALE, t } from "../i18n";
 
 const formatters = new Map();
 
@@ -87,6 +87,26 @@ export function fmtDateTime(value) {
 export function fmtTime(value) {
   if (!value) return DASH;
   return new Date(value).toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+/** Duration like "3 d 4 h", "5 h 12 min", "12 min" (units from common.duration in the locale files). */
+export function fmtDuration(seconds) {
+  if (seconds === null || seconds === undefined) return DASH;
+  const minutes = Math.floor(seconds / 60);
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  const mins = minutes % 60;
+  if (days > 0) return [t("common.duration.days", { n: days }), hours && t("common.duration.hours", { n: hours })].filter(Boolean).join(" ");
+  if (hours > 0) return [t("common.duration.hours", { n: hours }), mins && t("common.duration.minutes", { n: mins })].filter(Boolean).join(" ");
+  return t("common.duration.minutes", { n: mins });
+}
+
+/** Lifetime of a position in seconds: purchase -> last sale (closed) or now (open). Dates are local. */
+export function positionDurationSeconds(position, now = new Date()) {
+  const end = position.is_closed && position.sales.length
+    ? Math.max(...position.sales.map((s) => new Date(s.sold_at).getTime()))
+    : now.getTime();
+  return Math.max(0, Math.round((end - new Date(position.bought_at).getTime()) / 1000));
 }
 
 // ------------------------------------------------------------------ forms
