@@ -45,6 +45,11 @@ export const portfoliosApi = {
   removeSale: (groupId) => data(api.delete(`/api/sale-groups/${groupId}`)),
 };
 
+export const candlesApi = {
+  get: (symbol, interval, { limit = 500, before = null } = {}) =>
+    data(api.get("/api/candles", { params: { symbol, interval, limit, ...(before ? { before } : {}) } })),
+};
+
 export const journalApi = {
   stats: (portfolioId = null) => data(api.get("/api/journal/stats", { params: portfolioId ? { portfolio_id: portfolioId } : {} })),
 };

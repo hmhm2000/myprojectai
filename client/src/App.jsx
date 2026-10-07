@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
 import { AuthProvider } from "./context/AuthProvider";
@@ -11,6 +11,9 @@ import PortfoliosPage from "./pages/PortfoliosPage";
 import RegisterPage from "./pages/RegisterPage";
 import SettingsPage from "./pages/SettingsPage";
 import { LANGUAGE, t } from "./i18n";
+
+// The chart library is large - load the chart page only when it is opened.
+const ChartPage = lazy(() => import("./pages/ChartPage"));
 
 function FullScreenLoader() {
   return (
@@ -42,6 +45,7 @@ function AppRoutes() {
       <Route element={<Layout />}>
         <Route path="/portfolios" element={<PortfoliosPage />} />
         <Route path="/journal" element={<JournalPage />} />
+        <Route path="/chart" element={<Suspense fallback={<FullScreenLoader />}><ChartPage /></Suspense>} />
         <Route path="/favorites" element={<FavoritesPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>

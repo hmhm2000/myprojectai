@@ -1,11 +1,12 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../context/contexts";
 import { t } from "../i18n";
-import { BookIcon, LogoutIcon, SettingsIcon, StarIcon, WalletIcon } from "./icons";
+import { BookIcon, ChartIcon, LogoutIcon, SettingsIcon, StarIcon, WalletIcon } from "./icons";
 
 const LINKS = [
   { to: "/portfolios", labelKey: "nav.portfolios", Icon: WalletIcon },
   { to: "/journal", labelKey: "nav.journal", Icon: BookIcon },
+  { to: "/chart", labelKey: "nav.chart", Icon: ChartIcon },
   { to: "/favorites", labelKey: "nav.favorites", Icon: StarIcon },
   { to: "/settings", labelKey: "nav.settings", Icon: SettingsIcon },
 ];

@@ -2,6 +2,7 @@
 export default {
   portfolios: "Portfele",
   journal: "Dziennik",
+  chart: "Wykres",
   favorites: "Ulubione",
   settings: "Ustawienia",
   logout: "Wyloguj",

@@ -27,6 +27,13 @@ export const WalletIcon = icon(
     <circle cx="16" cy="14" r="1.2" />
   </>,
 );
+export const ChartIcon = icon(
+  <>
+    <path d="M8 4v4M8 16v4M16 6v3M16 17v3" />
+    <rect x="6" y="8" width="4" height="8" rx="1" />
+    <rect x="14" y="9" width="4" height="8" rx="1" />
+  </>,
+);
 export const BookIcon = icon(
   <>
     <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z" />

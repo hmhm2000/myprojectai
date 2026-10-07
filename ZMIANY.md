@@ -437,3 +437,18 @@ W `locales/pl/index.js` są też format liczb i dat (`pl-PL`) oraz symbol waluty
 - Czasy pochodzą z etapu 11 (świece). Pierwsze otwarcie może chwilę potrwać, bo świece są pobierane dla każdej zamkniętej pozycji. Potem wyniki są w pamięci serwera.
 - API: `GET /api/journal/stats?portfolio_id=&timing=true|false`.
 - Testy: `server/tests/test_journal_stats.py`.
+
+---
+
+## Etap 13: wykres świecowy
+
+- Nowa strona **Wykres** w menu. Zbudowana na TradingView Lightweight Charts (biblioteka open source, bez konta TradingView).
+  - Świece i wolumen, przybliżanie (kółko myszy) i przesuwanie (przeciąganie).
+  - Interwały: 1m, 5m, 15m, 30m, 1h, 4h, 1D.
+  - Przewinięcie w lewo **doładowuje starszą historię**, a co 30 s (gdy karta jest widoczna) odświeżają się najnowsze świece.
+  - Oś czasu pokazuje czas lokalny.
+- Coin i interwał są w adresie, np. `/chart?symbol=SPX&interval=4h`, więc taki link można zapisać.
+- Dane pochodzą z tego samego serwisu świec co etap 11 (Bybit albo OKX, z cache), bez drugiego systemu pobierania cen. Pod wykresem widać, z której giełdy są świece.
+- API: `GET /api/candles?symbol=BTC&interval=1h&limit=500&before=<unix>`. Każda świeca ma pole `closed`: `false` oznacza ostatnią, jeszcze trwającą świecę. Przyda się do wskaźników i alertów (potwierdzanie świec).
+- Strona wykresu ładuje się osobno, tylko gdy ją otworzysz, więc reszta aplikacji się nie spowalnia.
+- Testy: `server/tests/test_candles_api.py`.
