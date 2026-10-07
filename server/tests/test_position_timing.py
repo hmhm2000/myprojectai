@@ -129,5 +129,5 @@ def test_candle_service_fallback_and_cache():
         CandleService(FakePrices([]), {}, now=lambda: 0).get_candles("NOPE", "1h", 0, H)
     assert exc.value.code == "candles.symbol_not_found"
     with pytest.raises(AppError) as exc:
-        service.get_candles("BTC", "2h", 0, H)
+        service.get_candles("BTC", "2x", 0, H)
     assert exc.value.code == "candles.invalid_interval"

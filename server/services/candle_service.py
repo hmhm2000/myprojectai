@@ -1,29 +1,38 @@
-"""Candles (OHLCV) from public exchange endpoints - shared by position timing, the chart and (later) alerts.
+"""Candles (OHLCV) from public exchange endpoints - shared by the chart, indicators, alerts and position timing.
 
 - Source: Bybit when the pair is listed there (1000 candles per request), otherwise OKX
   (100 per request). If the first source fails, the next one is tried.
-- Cache: ranges reaching "now" are cached for LIVE_TTL_SECONDS; historical ranges never change,
-  so they are kept until evicted (LRU, MAX_ENTRIES).
+- Range cache: for every (source, symbol, native interval) one contiguous range of candles is kept
+  in memory. A request inside that range is served without calling the exchange; otherwise only
+  the missing part is fetched (older history, or the newest candles once LIVE_TTL_SECONDS passed).
+  So the chart, each indicator and alerts share the same data, and switching intervals back and
+  forth does not download the history again.
+- Custom intervals (3d, 2w, 2h, 3M ...) are aggregated from their native base interval
+  (see services/intervals.py) - the base candles come from the same cache.
 """
 from __future__ import annotations
 
+import math
 import threading
 import time
 from collections import OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable
 
 from config import settings
-from core.errors import AppError, BadRequest, NotFound
+from core.errors import AppError, NotFound
+from services.intervals import Interval, aggregate, parse
 from services.price_service import PriceService, price_service
 from services.providers import bybit, okx
-from services.providers.base import INTERVAL_SECONDS, Candle, ProviderError
+from services.providers.base import Candle, ProviderError
 
 FETCHERS = {"bybit": bybit.fetch_candles, "okx": okx.fetch_candles}
 SOURCE_PREFERENCE = ["bybit", "okx"]
 LIVE_TTL_SECONDS = 30
-MAX_ENTRIES = 300
-MAX_CANDLES = 5000
+SOURCE_BACKOFF_SECONDS = 30   # a source that just failed is skipped for a while (if another one exists)
+MAX_STORES = 200            # (source, symbol, interval) ranges kept in memory
+MAX_STORE_CANDLES = 100_000
+MAX_CANDLES = 20_000        # per request (custom intervals need several base candles each)
 
 
 @dataclass(frozen=True)
@@ -35,7 +44,15 @@ class CandleSeries:
 
     def is_closed(self, candle: Candle, now: float) -> bool:
         """A candle is confirmed (closed) once its interval has fully passed."""
-        return candle.time + INTERVAL_SECONDS[self.interval] <= now
+        return parse(self.interval).is_closed(candle.time, now)
+
+
+@dataclass
+class _Store:
+    start: int                       # covered range [start, end] (unix s)
+    end: int
+    refreshed: float                 # last fetch that reached "now" (live data), 0 = never
+    candles: dict[int, Candle] = field(default_factory=dict)
 
 
 class CandleService:
@@ -45,49 +62,91 @@ class CandleService:
         self._fetchers = fetchers
         self._timeout = timeout
         self._now = now
-        self._cache: OrderedDict[tuple, tuple[float | None, CandleSeries]] = OrderedDict()
+        self._stores: OrderedDict[tuple, _Store] = OrderedDict()
         self._lock = threading.Lock()
+        self._key_locks: dict[tuple, threading.Lock] = {}
+        self._failed_until: dict[str, float] = {}
+
+    # ------------------------------------------------------------------ public
 
     def get_candles(self, symbol: str, interval: str, start: int, end: int,
                     max_candles: int = MAX_CANDLES) -> CandleSeries:
-        """Candles overlapping [start, end] (unix seconds), oldest first."""
-        if interval not in INTERVAL_SECONDS:
-            raise BadRequest("candles.invalid_interval", f"Unsupported interval: {interval}", interval=interval)
-        step = INTERVAL_SECONDS[interval]
+        """Candles overlapping [start, end] (unix s), oldest first (at most `max_candles`, the newest)."""
+        spec = parse(interval)
+        base = spec.base
         now = self._now()
-        start = start // step * step                  # include the candle that contains `start`
+        start = spec.bucket_start(max(start, 0))      # include the candle that contains `start`
         end = min(end, int(now))
-        live = end >= now - step
-        cache_end = end // step * step if live else end
+        base_count = min(MAX_CANDLES, math.ceil((end - start) / base.seconds) + 2)
 
         sources = [s for s in SOURCE_PREFERENCE if s in self._prices.sources_for(symbol) and s in self._fetchers]
         if not sources:
             raise NotFound("candles.symbol_not_found", f"No exchange lists {symbol}", symbol=symbol)
-
-        key = (symbol, interval, start, cache_end, max_candles)
-        with self._lock:
-            cached = self._cache.get(key)
-            if cached and (cached[0] is None or cached[0] > now):
-                self._cache.move_to_end(key)
-                return cached[1]
+        healthy = [s for s in sources if self._failed_until.get(s, 0) <= now]
+        sources = healthy or sources
 
         last_error: ProviderError | None = None
         for source in sources:
             try:
-                candles = self._fetchers[source](symbol, self._prices.quote_currency, interval,
-                                                 start * 1000, end * 1000, max_candles, self._timeout)
+                candles = self._native(source, symbol, base, start, end, base_count, now)
             except ProviderError as exc:
                 last_error = exc
+                self._failed_until[source] = now + SOURCE_BACKOFF_SECONDS
                 continue
-            series = CandleSeries(symbol, interval, source, candles)
-            with self._lock:
-                self._cache[key] = (now + LIVE_TTL_SECONDS if live else None, series)
-                self._cache.move_to_end(key)
-                while len(self._cache) > MAX_ENTRIES:
-                    self._cache.popitem(last=False)
-            return series
+            if not spec.native:
+                candles = aggregate(candles, spec)
+            return CandleSeries(symbol, spec.name, source, candles[-max_candles:])
         raise AppError(502, "candles.unavailable", f"Candles unavailable: {last_error}",
                        source_error=last_error.code if last_error else None)
+
+    # ----------------------------------------------------------------- private
+
+    def _fetch(self, source: str, symbol: str, spec: Interval, start: int, end: int) -> list[Candle]:
+        count = min(MAX_CANDLES, math.ceil((end - start) / spec.seconds) + 2)
+        return self._fetchers[source](symbol, self._prices.quote_currency, spec.name,
+                                      start * 1000, end * 1000, count, self._timeout)
+
+    def _native(self, source: str, symbol: str, spec: Interval, start: int, end: int,
+                max_candles: int, now: float) -> list[Candle]:
+        key = (source, symbol, spec.name)
+        with self._lock:
+            key_lock = self._key_locks.setdefault(key, threading.Lock())
+        with key_lock:                                  # one fetch per range at a time
+            with self._lock:
+                store = self._stores.get(key)
+            live = end >= now - spec.seconds
+
+            if store is None:
+                # `refreshed` = time of the last fetch that reached "now" (0 = newest candles never fetched)
+                store = _Store(start, end, now if live else 0.0)
+                store.candles.update({c.time: c for c in self._fetch(source, symbol, spec, start, end)})
+            else:
+                if start < store.start:                  # older history -> fetch only that part
+                    older = self._fetch(source, symbol, spec, start, store.start - 1)
+                    store.candles.update({c.time: c for c in older})
+                    store.start = start
+                stale_tail = now - store.refreshed >= LIVE_TTL_SECONDS
+                if (live and stale_tail) or (not live and end > store.end):
+                    # newest candles: from the last stored one (it may have been still forming)
+                    stored = [t for t in store.candles if t <= store.end]
+                    tail_from = max(stored) if stored else store.start
+                    newer = self._fetch(source, symbol, spec, tail_from, end)
+                    store.candles.update({c.time: c for c in newer})
+                    store.end = max(store.end, end)
+                    if live:
+                        store.refreshed = now
+
+            with self._lock:
+                if len(store.candles) <= MAX_STORE_CANDLES:
+                    self._stores[key] = store
+                    self._stores.move_to_end(key)
+                    while len(self._stores) > MAX_STORES:
+                        self._stores.popitem(last=False)
+                else:
+                    self._stores.pop(key, None)
+
+            selected = sorted((c for t, c in store.candles.items() if start <= t <= end), key=lambda c: c.time)
+            return selected[-max_candles:]
 
 
 candle_service = CandleService(price_service, timeout=settings.price_http_timeout_seconds)

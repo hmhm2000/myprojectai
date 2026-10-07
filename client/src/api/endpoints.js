@@ -79,6 +79,13 @@ export const chartIndicatorsApi = {
   remove: (id) => api.delete(`/api/chart-indicators/${id}`),
 };
 
+export const chartIntervalsApi = {
+  list: () => data(api.get("/api/chart-intervals")),
+  add: (name) => data(api.post("/api/chart-intervals", { name })),
+  setPinned: (name, pinned) => data(api.put(`/api/chart-intervals/${encodeURIComponent(name)}`, { pinned })),
+  remove: (name) => api.delete(`/api/chart-intervals/${encodeURIComponent(name)}`),
+};
+
 export const journalApi = {
   stats: (portfolioId = null) => data(api.get("/api/journal/stats", { params: portfolioId ? { portfolio_id: portfolioId } : {} })),
 };

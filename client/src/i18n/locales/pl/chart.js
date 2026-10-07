@@ -45,13 +45,18 @@ export default {
     k_smoothing: "%K wygł.",
     d_smoothing: "%D wygł.",
   },
-  intervals: {
-    "1m": "1m",
-    "5m": "5m",
-    "15m": "15m",
-    "30m": "30m",
-    "1h": "1h",
-    "4h": "4h",
-    "1d": "1D",
+  // Jednostki interwałów w etykietach ("4h", "3D", "2W", "1M"); m = minuty, M = miesiące.
+  units: { m: "m", h: "h", d: "D", w: "W", M: "M" },
+  // Menu interwałów (strzałka obok przycisków): przypinanie i własne interwały.
+  customInterval: {
+    menu: "Wszystkie interwały",
+    menuHint: "Zaznaczone są widoczne jako przyciski nad wykresem.",
+    pin: "Pokaż jako przycisk",
+    own: "własny",
+    placeholder: "np. 3D",
+    hint: "Własny interwał: liczba + jednostka (m, h, D, W, M), np. 3D, 2W, 2h, 3M. M = miesiąc, m = minuta.",
+    add: "Dodaj",
+    invalid: "Nieprawidłowy interwał (np. 3D, 2W, 45m; maks. 1 rok).",
+    remove: "Usuń interwał",
   },
 };

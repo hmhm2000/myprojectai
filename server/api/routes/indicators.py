@@ -11,7 +11,7 @@ from core.errors import BadRequest
 from indicators.base import REGISTRY
 from indicators.service import compute_indicator
 from services.candle_service import candle_service
-from services.providers.base import INTERVAL_SECONDS
+from services.intervals import parse
 
 router = APIRouter(prefix="/api/indicators", tags=["indicators"], dependencies=[Depends(get_current_user)])
 
@@ -74,9 +74,8 @@ def indicator_values(
             raise ValueError
     except ValueError:
         raise BadRequest("indicators.invalid_param", "params must be a JSON object", param="params")
-    for value in (interval, indicator_interval):
-        if value is not None and value not in INTERVAL_SECONDS:
-            raise BadRequest("candles.invalid_interval", f"Unsupported interval: {value}", interval=value)
+    interval = parse(interval).name
+    indicator_interval = parse(indicator_interval).name if indicator_interval else None
     now = time.time()
     result = compute_indicator(candle_service, indicator_id, raw, symbol.strip().upper(), interval,
                                start, end or int(now), now, indicator_interval=indicator_interval)

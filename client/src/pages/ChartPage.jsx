@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import CoinPicker from "../components/CoinPicker";
 import CandleChart from "../components/chart/CandleChart";
 import IndicatorSidebar from "../components/chart/IndicatorSidebar";
+import IntervalPicker from "../components/chart/IntervalPicker";
 import { useIndicators } from "../components/chart/useIndicators";
 import { chartIndicatorsApi, indicatorsApi } from "../api/endpoints";
 import { Pnl } from "../components/ui";
@@ -11,8 +12,8 @@ import { fmtDateTime, fmtQty, fmtUnitPrice } from "../lib/format";
 import { loadSymbolTrades } from "../lib/symbolTrades";
 import { portfoliosApi } from "../api/endpoints";
 import { EyeIcon } from "../components/icons";
+import { parseInterval } from "../lib/intervals";
 
-const INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"];
 const LEGACY_INDICATORS_KEY = "chart:indicators"; // old browser-only list, imported once to the server
 const SHOW_TRADES_KEY = "chart:showTrades";
 
@@ -90,7 +91,7 @@ function Reason({ label, text }) {
 export default function ChartPage() {
   const [params, setParams] = useSearchParams();
   const symbol = (params.get("symbol") || "BTC").toUpperCase();
-  const interval = INTERVALS.includes(params.get("interval")) ? params.get("interval") : "1h";
+  const interval = parseInterval(params.get("interval")) ?? "1h";
   const update = (changes) => setParams({ symbol, interval, ...changes }, { replace: true });
 
   const [events, setEvents] = useState([]);
@@ -166,20 +167,7 @@ export default function ChartPage() {
         <div className="w-56">
           <CoinPicker key={symbol} value={symbol} onChange={(s) => s && update({ symbol: s })} />
         </div>
-        <div className="flex flex-wrap gap-1">
-          {INTERVALS.map((value) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => update({ interval: value })}
-              className={`rounded-lg px-2.5 py-1.5 text-xs transition ${
-                value === interval ? "bg-neon-violet/20 text-zinc-50" : "text-zinc-400 hover:bg-white/5"
-              }`}
-            >
-              {t(`chart.intervals.${value}`)}
-            </button>
-          ))}
-        </div>
+        <IntervalPicker value={interval} onChange={(value) => update({ interval: value })} />
       </div>
 
       <label className="flex items-center gap-2 text-xs text-zinc-400">

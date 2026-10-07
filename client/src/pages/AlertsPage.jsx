@@ -6,8 +6,9 @@ import { ErrorBanner } from "../components/ui";
 import { hasTranslation, t } from "../i18n";
 import { conditionText, operandLabel } from "../lib/alertText";
 import { fmtDateTime, fmtPrice } from "../lib/format";
+import { intervalLabel, intervalOptions } from "../lib/intervals";
+import { useChartIntervals } from "../lib/useChartIntervals";
 
-const INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"];
 const OPERATORS = [">", "<", ">=", "<=", "==", "crosses_above", "crosses_below"];
 const SOURCES = ["close", "open", "high", "low", "hl2", "hlc3", "ohlc4"];
 const paramLabel = (name) => (hasTranslation(`chart.params.${name}`) ? t(`chart.params.${name}`) : name);
@@ -74,6 +75,7 @@ function NewAlertForm({ definitions, onCreated }) {
   });
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [intervals] = useChartIntervals();
   const set = (changes) => setForm((f) => ({ ...f, ...changes }));
 
   const toApi = (operand) => {
@@ -111,7 +113,7 @@ function NewAlertForm({ definitions, onCreated }) {
         <label>
           <span className="label">{t("alerts.form.interval")}</span>
           <select value={form.interval} onChange={(e) => set({ interval: e.target.value })} className="text-sm">
-            {INTERVALS.map((i) => <option key={i} value={i}>{t(`chart.intervals.${i}`)}</option>)}
+            {intervalOptions(intervals, form.interval).map((i) => <option key={i} value={i}>{intervalLabel(i)}</option>)}
           </select>
         </label>
       </div>
@@ -150,7 +152,7 @@ function AlertRow({ alert, definitions, onChanged }) {
     <li className="space-y-1 border-t border-white/[0.04] py-2.5 first:border-0">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
         <span className="font-semibold text-zinc-100">{alert.symbol}</span>
-        <span className="chip">{t(`chart.intervals.${alert.interval}`)}</span>
+        <span className="chip">{intervalLabel(alert.interval)}</span>
         <span className="text-zinc-200">{conditionText(alert.condition, definitions)}</span>
         <span className={`chip ${alert.active ? "text-profit" : ""}`}>{alert.active ? t("alerts.list.active") : t("alerts.list.inactive")}</span>
         {alert.on_closed_candle && <span className="text-[11px] text-zinc-500">{t("alerts.list.closedOnly")}</span>}
