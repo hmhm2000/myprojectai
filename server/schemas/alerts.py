@@ -5,8 +5,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from schemas.portfolio import Note, normalize_symbol
 
-Interval = Literal["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
 Operator = Literal[">", "<", ">=", "<=", "==", "crosses_above", "crosses_below"]
+Trigger = Literal["intrabar", "bar_open", "bar_close"]   # see services/alerts.py
 
 
 class PriceOperand(BaseModel):
@@ -36,18 +36,26 @@ class Condition(BaseModel):
 
 class AlertIn(BaseModel):
     symbol: str
-    interval: Interval = "1h"
+    interval: str = "1h"
     condition: Condition
     mode: Literal["once", "repeat"] = "once"
-    on_closed_candle: bool = True
+    trigger: Trigger = "bar_close"
     note: Note = None
 
     _symbol = field_validator("symbol")(normalize_symbol)
+
+    @field_validator("interval")
+    @classmethod
+    def _interval(cls, value: str) -> str:
+        from services.intervals import parse
+
+        return parse(value).name
 
 
 class AlertPatch(BaseModel):
     active: Optional[bool] = None
     mode: Optional[Literal["once", "repeat"]] = None
+    trigger: Optional[Trigger] = None
     note: Note = None
 
 
@@ -59,7 +67,7 @@ class AlertOut(BaseModel):
     interval: str
     condition: Condition
     mode: str
-    on_closed_candle: bool
+    trigger: str
     active: bool
     note: Optional[str]
     last_state: Optional[bool]

@@ -10,12 +10,28 @@ export default {
     exitReason: "Powód wyjścia",
     plan: "Plan",
     fromPosition: "{{quantity}} z zakupu {{date}} po {{price}}",
+    showAll: "Pokaż transakcje na wykresie",
+    showOnChart: "Pokaż na wykresie",
+    hideOnChart: "Ukryj na wykresie",
   },
   // Wskaźniki na wykresie (liczone na serwerze).
   indicators: {
-    add: "+ Wskaźnik",
-    confirm: "Dodaj",
-    remove: "Usuń wskaźnik",
+    title: "Wskaźniki",
+    add: "Dodaj",
+    addTitle: "Nowy wskaźnik",
+    editTitle: "Ustawienia: {{name}}",
+    empty: "Brak wskaźników. Dodaj np. SMA, RSI albo Bollinger Bands.",
+    indicator: "Wskaźnik",
+    interval: "Interwał wskaźnika",
+    intervalHint: "Np. SMA 100 z 1D na wykresie 1H. Historia pokazuje tylko zamknięte świece tego interwału.",
+    followChart: "Jak wykres",
+    ownInterval: "liczony z {{interval}}",
+    chartInterval: "jak wykres ({{interval}})",
+    edit: "Edytuj",
+    hide: "Ukryj",
+    show: "Pokaż",
+    remove: "Usuń",
+    reset: "Przywróć domyślne",
   },
   // Nazwy parametrów wskaźników (klucze z backendu).
   params: {
@@ -29,13 +45,18 @@ export default {
     k_smoothing: "%K wygł.",
     d_smoothing: "%D wygł.",
   },
-  intervals: {
-    "1m": "1m",
-    "5m": "5m",
-    "15m": "15m",
-    "30m": "30m",
-    "1h": "1h",
-    "4h": "4h",
-    "1d": "1D",
+  // Jednostki interwałów w etykietach ("4h", "3D", "2W", "1M"); m = minuty, M = miesiące.
+  units: { m: "m", h: "h", d: "D", w: "W", M: "M" },
+  // Menu interwałów (strzałka obok przycisków): przypinanie i własne interwały.
+  customInterval: {
+    menu: "Wszystkie interwały",
+    menuHint: "Zaznaczone są widoczne jako przyciski nad wykresem.",
+    pin: "Pokaż jako przycisk",
+    own: "własny",
+    placeholder: "np. 3D",
+    hint: "Własny interwał: liczba + jednostka (m, h, D, W, M), np. 3D, 2W, 2h, 3M. M = miesiąc, m = minuta.",
+    add: "Dodaj",
+    invalid: "Nieprawidłowy interwał (np. 3D, 2W, 45m; maks. 1 rok).",
+    remove: "Usuń interwał",
   },
 };

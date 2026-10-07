@@ -40,6 +40,7 @@ export default {
     candles: {
       symbol_not_found: "Brak świec dla {{symbol}} na OKX/Bybit",
       invalid_interval: "Nieobsługiwany interwał: {{interval}}",
+      interval_not_found: "Nie ma takiego interwału na liście: {{interval}}",
       unavailable: "Nie udało się pobrać świec z giełdy",
     },
     prices: {

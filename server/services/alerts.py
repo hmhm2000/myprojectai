@@ -2,8 +2,14 @@
 
 Every ~minute all active alerts are checked, grouped by (symbol, interval) so the candles are
 fetched once per group. A condition is `left op right`, each side a price, a fixed value or an
-indicator output. By default it is evaluated on the last CLOSED candle (confirmed values);
-`on_closed_candle=False` uses the forming candle (current price).
+indicator output. When it is evaluated depends on the alert's trigger:
+
+- "intrabar"  - immediately: on the forming candle at every check (current price), at most one
+                trigger per candle;
+- "bar_open"  - once per candle, when a new candle opens, with the values at that moment (the new
+                candle counts with its open price only);
+- "bar_close" - once per candle, after it closes (confirmed values, nothing repaints).
+
 An alert fires on the transition "not met -> met" (edge), so a condition that stays true does not
 spam; "once" alerts are deactivated after firing, "repeat" alerts re-arm when the condition stops
 being met.
@@ -24,11 +30,13 @@ from indicators.base import OHLCV, get_indicator, validate_params
 from indicators.core import crossover, crossunder
 from models.alerts import Alert, AlertEvent
 from schemas.alerts import Condition
-from services.providers.base import INTERVAL_SECONDS
+from services.intervals import parse
 
 logger = logging.getLogger(__name__)
 
 EXTRA_CANDLES = 5
+TRIGGERS = ("intrabar", "bar_open", "bar_close")
+PER_CANDLE = ("bar_open", "bar_close")          # evaluated once per candle
 
 
 # ------------------------------------------------------------------ condition validation
@@ -92,29 +100,47 @@ def evaluate(condition: Condition, data: OHLCV, index: int) -> Evaluation:
     return Evaluation(bool(met), lv, rv, data.close[index], data.time[index])
 
 
-def evaluation_index(data: OHLCV, interval: str, on_closed_candle: bool, now: float) -> int:
-    """Last closed candle (confirmed) or the forming one."""
-    if not on_closed_candle:
-        return len(data.time) - 1
-    step = INTERVAL_SECONDS[interval]
-    for i in range(len(data.time) - 1, -1, -1):
-        if data.time[i] + step <= now:
-            return i
-    return -1
+def at_open(data: OHLCV, index: int) -> OHLCV:
+    """Candles up to `index`, the last one as it was right after it opened (only its open price)."""
+    o = data.open[index]
+    cut = index + 1
+    return OHLCV(time=data.time[:cut], open=data.open[:cut], high=data.high[:index] + [o],
+                 low=data.low[:index] + [o], close=data.close[:index] + [o], volume=data.volume[:index] + [0.0])
+
+
+def evaluation_point(data: OHLCV, interval: str, trigger: str, now: float) -> tuple[OHLCV, int]:
+    """Data and index of the candle the condition is evaluated on (-1 = nothing to evaluate yet)."""
+    spec = parse(interval)
+    last = len(data.time) - 1
+    if trigger == "bar_close":
+        for i in range(last, -1, -1):
+            if spec.is_closed(data.time[i], now):
+                return data, i
+        return data, -1
+    forming = last >= 0 and not spec.is_closed(data.time[last], now)
+    if trigger == "bar_open":
+        return (at_open(data, last), last) if forming else (data, -1)
+    return data, last                            # intrabar: the newest candle
 
 
 def load_data(candle_service, symbol: str, interval: str, warmup: int, now: float) -> OHLCV:
-    step = INTERVAL_SECONDS[interval]
+    step = parse(interval).seconds
     count = warmup + EXTRA_CANDLES
     series = candle_service.get_candles(symbol, interval, int(now) - count * step, int(now), max_candles=count + 2)
     return OHLCV.from_candles(series.candles)
 
 
-def preview(alert_condition: Condition, symbol: str, interval: str, on_closed_candle: bool,
+def preview(alert_condition: Condition, symbol: str, interval: str, trigger: str,
             candle_service, now: Optional[float] = None) -> Evaluation:
     now = now or time.time()
     data = load_data(candle_service, symbol, interval, warmup_for(alert_condition), now)
-    return evaluate(alert_condition, data, evaluation_index(data, interval, on_closed_candle, now))
+    return evaluate(alert_condition, *evaluation_point(data, interval, trigger, now))
+
+
+def _last_trigger_candle(db, alert: Alert) -> Optional[int]:
+    row = (db.query(AlertEvent.candle_time).filter(AlertEvent.alert_id == alert.id)
+           .order_by(AlertEvent.id.desc()).first())
+    return row[0] if row else None
 
 
 def check_alerts(db, candle_service, now: Optional[float] = None) -> list[AlertEvent]:
@@ -133,10 +159,19 @@ def check_alerts(db, candle_service, now: Optional[float] = None) -> list[AlertE
             logger.warning("Alert check skipped for %s %s: %s", symbol, interval, exc)
             continue
         for alert, condition in items:
-            result = evaluate(condition, data, evaluation_index(data, interval, alert.on_closed_candle, now))
-            fire = result.met and alert.last_state is not True
-            alert.last_state = result.met
             alert.last_checked_at = now_dt
+            point, index = evaluation_point(data, interval, alert.trigger, now)
+            if index < 0:
+                continue
+            candle_time = point.time[index]
+            if alert.trigger in PER_CANDLE and alert.last_candle_time == candle_time:
+                continue                                         # this candle was already evaluated
+            result = evaluate(condition, point, index)
+            fire = result.met and alert.last_state is not True   # edge: not met -> met
+            if fire and alert.trigger == "intrabar" and _last_trigger_candle(db, alert) == candle_time:
+                fire = False                                     # at most one trigger per candle
+            alert.last_state = result.met
+            alert.last_candle_time = candle_time
             if not fire:
                 continue
             event = AlertEvent(alert_id=alert.id, triggered_at=now_dt, candle_time=result.candle_time,

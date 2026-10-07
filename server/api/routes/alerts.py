@@ -25,7 +25,7 @@ def _get_alert(db: Session, alert_id: int, user: User) -> Alert:
 
 def _out(alert: Alert) -> AlertOut:
     return AlertOut(
-        **{k: getattr(alert, k) for k in ("id", "symbol", "interval", "mode", "on_closed_candle", "active", "note",
+        **{k: getattr(alert, k) for k in ("id", "symbol", "interval", "mode", "trigger", "active", "note",
                                          "last_state", "last_checked_at", "last_triggered_at", "created_at")},
         condition=Condition.model_validate_json(alert.condition),
         unseen_events=sum(1 for e in alert.events if not e.seen),
@@ -41,7 +41,7 @@ def list_alerts(user: User = Depends(get_current_user), db: Session = Depends(ge
 def create_alert(data: AlertIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     validate_condition(data.condition)
     alert = Alert(user_id=user.id, symbol=data.symbol, interval=data.interval, condition=data.condition.model_dump_json(),
-                  mode=data.mode, on_closed_candle=data.on_closed_candle, note=data.note, active=True)
+                  mode=data.mode, trigger=data.trigger, note=data.note, active=True)
     db.add(alert)
     db.commit()
     db.refresh(alert)
@@ -52,8 +52,9 @@ def create_alert(data: AlertIn, user: User = Depends(get_current_user), db: Sess
 def update_alert(alert_id: int, data: AlertPatch, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     alert = _get_alert(db, alert_id, user)
     changes = data.model_dump(exclude_unset=True)
-    if changes.get("active") and not alert.active:
+    if (changes.get("active") and not alert.active) or changes.get("trigger", alert.trigger) != alert.trigger:
         alert.last_state = None          # re-armed: fire again if the condition is met
+        alert.last_candle_time = None
     for field, value in changes.items():
         setattr(alert, field, value)
     db.commit()
@@ -73,7 +74,7 @@ def check_alert(alert_id: int, user: User = Depends(get_current_user), db: Sessi
     """Current values of the condition - a preview that does not change the alert."""
     alert = _get_alert(db, alert_id, user)
     result = preview(Condition.model_validate_json(alert.condition), alert.symbol, alert.interval,
-                     alert.on_closed_candle, candle_service)
+                     alert.trigger, candle_service)
     return AlertCheckOut(**result.__dict__)
 
 

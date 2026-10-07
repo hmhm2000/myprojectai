@@ -35,6 +35,8 @@ export const portfoliosApi = {
   updatePosition: (id, body) => data(api.put(`/api/positions/${id}`, body)),
   removePosition: (id) => data(api.delete(`/api/positions/${id}`)),
   positionTiming: (id) => data(api.get(`/api/positions/${id}/timing`)),
+  setPositionOnChart: (id, show) => data(api.patch(`/api/positions/${id}/chart`, { show_on_chart: show })),
+  setSaleOnChart: (groupId, show) => data(api.patch(`/api/sale-groups/${groupId}/chart`, { show_on_chart: show })),
 
   reorderPositions: (portfolioId, positionIds) =>
     data(api.put(`/api/portfolios/${portfolioId}/positions/order`, { position_ids: positionIds })),
@@ -62,8 +64,26 @@ export const alertsApi = {
 
 export const indicatorsApi = {
   list: () => data(api.get("/api/indicators")),
-  values: (id, { symbol, interval, start, end, params }) =>
-    data(api.get(`/api/indicators/${id}/values`, { params: { symbol, interval, start, end, params: JSON.stringify(params) } })),
+  values: (id, { symbol, interval, start, end, params, indicatorInterval = null }) =>
+    data(api.get(`/api/indicators/${id}/values`, {
+      params: { symbol, interval, start, end, params: JSON.stringify(params), ...(indicatorInterval ? { indicator_interval: indicatorInterval } : {}) },
+    })),
+};
+
+// The user's chart indicators (saved on the server, per user).
+export const chartIndicatorsApi = {
+  list: () => data(api.get("/api/chart-indicators")),
+  add: (body) => data(api.post("/api/chart-indicators", body)),
+  update: (id, body) => data(api.put(`/api/chart-indicators/${id}`, body)),
+  reset: (id) => data(api.post(`/api/chart-indicators/${id}/reset`)),
+  remove: (id) => api.delete(`/api/chart-indicators/${id}`),
+};
+
+export const chartIntervalsApi = {
+  list: () => data(api.get("/api/chart-intervals")),
+  add: (name) => data(api.post("/api/chart-intervals", { name })),
+  setPinned: (name, pinned) => data(api.put(`/api/chart-intervals/${encodeURIComponent(name)}`, { pinned })),
+  remove: (name) => api.delete(`/api/chart-intervals/${encodeURIComponent(name)}`),
 };
 
 export const journalApi = {

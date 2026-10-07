@@ -11,6 +11,7 @@ from core.errors import BadRequest
 from indicators.base import REGISTRY
 from indicators.service import compute_indicator
 from services.candle_service import candle_service
+from services.intervals import parse
 
 router = APIRouter(prefix="/api/indicators", tags=["indicators"], dependencies=[Depends(get_current_user)])
 
@@ -65,6 +66,7 @@ def indicator_values(
     start: int = Query(..., description="Unix seconds - first candle (inclusive)"),
     end: Optional[int] = Query(None, description="Unix seconds - last candle; default now"),
     params: str = Query("{}", description='JSON, e.g. {"length": 14}'),
+    indicator_interval: Optional[str] = Query(None, description="Compute on this timeframe (e.g. 1d) and map onto the chart"),
 ):
     try:
         raw = json.loads(params)
@@ -72,8 +74,10 @@ def indicator_values(
             raise ValueError
     except ValueError:
         raise BadRequest("indicators.invalid_param", "params must be a JSON object", param="params")
+    interval = parse(interval).name
+    indicator_interval = parse(indicator_interval).name if indicator_interval else None
     now = time.time()
     result = compute_indicator(candle_service, indicator_id, raw, symbol.strip().upper(), interval,
-                               start, end or int(now), now)
+                               start, end or int(now), now, indicator_interval=indicator_interval)
     return IndicatorValuesOut(indicator=result.indicator_id, params=result.params, time=result.time,
                               closed=result.closed, outputs=result.outputs)

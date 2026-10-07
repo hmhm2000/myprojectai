@@ -6,8 +6,10 @@ import { ErrorBanner } from "../components/ui";
 import { hasTranslation, t } from "../i18n";
 import { conditionText, operandLabel } from "../lib/alertText";
 import { fmtDateTime, fmtPrice } from "../lib/format";
+import { intervalLabel, intervalOptions } from "../lib/intervals";
+import { useChartIntervals } from "../lib/useChartIntervals";
 
-const INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"];
+const TRIGGERS = ["intrabar", "bar_open", "bar_close"];
 const OPERATORS = [">", "<", ">=", "<=", "==", "crosses_above", "crosses_below"];
 const SOURCES = ["close", "open", "high", "low", "hl2", "hlc3", "ohlc4"];
 const paramLabel = (name) => (hasTranslation(`chart.params.${name}`) ? t(`chart.params.${name}`) : name);
@@ -69,11 +71,12 @@ function OperandEditor({ operand, onChange, definitions }) {
 
 function NewAlertForm({ definitions, onCreated }) {
   const [form, setForm] = useState({
-    symbol: "BTC", interval: "1h", mode: "once", on_closed_candle: true, note: "",
+    symbol: "BTC", interval: "1h", mode: "once", trigger: "bar_close", note: "",
     left: { type: "price" }, op: ">", right: { type: "value", value: "" },
   });
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [intervals] = useChartIntervals();
   const set = (changes) => setForm((f) => ({ ...f, ...changes }));
 
   const toApi = (operand) => {
@@ -91,7 +94,7 @@ function NewAlertForm({ definitions, onCreated }) {
     setError(null);
     try {
       await alertsApi.create({ symbol: form.symbol, interval: form.interval, condition, mode: form.mode,
-        on_closed_candle: form.on_closed_candle, note: form.note.trim() || null });
+        trigger: form.trigger, note: form.note.trim() || null });
       onCreated();
     } catch (err) {
       setError(errorMessage(err));
@@ -111,7 +114,7 @@ function NewAlertForm({ definitions, onCreated }) {
         <label>
           <span className="label">{t("alerts.form.interval")}</span>
           <select value={form.interval} onChange={(e) => set({ interval: e.target.value })} className="text-sm">
-            {INTERVALS.map((i) => <option key={i} value={i}>{t(`chart.intervals.${i}`)}</option>)}
+            {intervalOptions(intervals, form.interval).map((i) => <option key={i} value={i}>{intervalLabel(i)}</option>)}
           </select>
         </label>
       </div>
@@ -128,10 +131,13 @@ function NewAlertForm({ definitions, onCreated }) {
           {["once", "repeat"].map((m) => <option key={m} value={m}>{t(`alerts.form.modes.${m}`)}</option>)}
         </select>
         <label className="flex items-center gap-2 text-zinc-400">
-          <input type="checkbox" checked={form.on_closed_candle} onChange={(e) => set({ on_closed_candle: e.target.checked })} />
-          {t("alerts.form.closedCandle")}
+          {t("alerts.form.trigger")}
+          <select value={form.trigger} onChange={(e) => set({ trigger: e.target.value })} className="text-sm">
+            {TRIGGERS.map((tr) => <option key={tr} value={tr}>{t(`alerts.triggers.${tr}.label`)}</option>)}
+          </select>
         </label>
       </div>
+      <p className="text-xs text-zinc-500">{t(`alerts.triggers.${form.trigger}.hint`)}</p>
       <input className="w-full text-sm" placeholder={t("alerts.form.note")} maxLength={500} value={form.note}
         onChange={(e) => set({ note: e.target.value })} />
       {error && <p className="text-sm text-loss">{error}</p>}
@@ -150,10 +156,14 @@ function AlertRow({ alert, definitions, onChanged }) {
     <li className="space-y-1 border-t border-white/[0.04] py-2.5 first:border-0">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
         <span className="font-semibold text-zinc-100">{alert.symbol}</span>
-        <span className="chip">{t(`chart.intervals.${alert.interval}`)}</span>
+        <span className="chip">{intervalLabel(alert.interval)}</span>
         <span className="text-zinc-200">{conditionText(alert.condition, definitions)}</span>
         <span className={`chip ${alert.active ? "text-profit" : ""}`}>{alert.active ? t("alerts.list.active") : t("alerts.list.inactive")}</span>
-        {alert.on_closed_candle && <span className="text-[11px] text-zinc-500">{t("alerts.list.closedOnly")}</span>}
+        <select value={alert.trigger} title={t(`alerts.triggers.${alert.trigger}.hint`)}
+          onChange={(e) => run(() => alertsApi.update(alert.id, { trigger: e.target.value }))}
+          className="py-0.5 text-[11px] text-zinc-400">
+          {TRIGGERS.map((tr) => <option key={tr} value={tr}>{t(`alerts.triggers.${tr}.short`)}</option>)}
+        </select>
         {alert.last_triggered_at && (
           <span className="text-xs text-zinc-500">{t("alerts.list.lastTriggered", { date: fmtDateTime(`${alert.last_triggered_at}Z`) })}</span>
         )}

@@ -58,6 +58,8 @@ def _load() -> Settings:
     secret_key = os.getenv("SECRET_KEY", "")
     if not secret_key:
         raise RuntimeError("SECRET_KEY is missing in server/.env (see server/.env.example)")
+    if len(secret_key) < 32:
+        raise RuntimeError("SECRET_KEY is too short - use at least 32 random characters (see server/.env.example)")
 
     default_db = f"sqlite:///{(BASE_DIR / 'db' / 'database.db').as_posix()}"
 

@@ -14,6 +14,7 @@ export function collectSaleGroups(coin) {
           price: sale.price,
           sold_at: sale.sold_at,
           exit_reason: sale.exit_reason,
+          show_on_chart: sale.show_on_chart,
           parts: [],
         });
       }

@@ -35,6 +35,7 @@ def _position_out(position: Position, metrics) -> PositionOut:
         plan=position.plan,
         target_price=position.target_price,
         stop_loss=position.stop_loss,
+        show_on_chart=position.show_on_chart,
         sort_order=position.sort_order,
         sales=[SaleOut.model_validate(sale) for sale in position.sales],
         held_quantity=metrics.held_quantity,

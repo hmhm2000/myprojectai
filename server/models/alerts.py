@@ -15,10 +15,11 @@ class Alert(Base):
     interval = Column(String, nullable=False)
     condition = Column(Text, nullable=False)          # JSON: {"left": operand, "op": ">", "right": operand}
     mode = Column(String, nullable=False, default="once")          # "once" (then deactivated) | "repeat"
-    on_closed_candle = Column(Boolean, nullable=False, default=True)
+    trigger = Column(String, nullable=False, default="bar_close")   # "intrabar" | "bar_open" | "bar_close"
     active = Column(Boolean, nullable=False, default=True)
     note = Column(Text, nullable=True)
     last_state = Column(Boolean, nullable=True)       # result of the previous check (edge detection)
+    last_candle_time = Column(Integer, nullable=True) # candle of the previous check (bar_open/bar_close: once per candle)
     last_checked_at = Column(DateTime, nullable=True)
     last_triggered_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, nullable=False, default=utcnow)

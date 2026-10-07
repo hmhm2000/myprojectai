@@ -20,8 +20,9 @@ export async function loadSymbolTrades(symbol) {
         time: Math.floor(new Date(position.bought_at).getTime() / 1000),
         portfolio: view.name,
         symbol,
-        price: position.buy_price,
+        price: position.buy_price,            // real purchase price - never the candle price
         quantity: position.quantity,
+        showOnChart: position.show_on_chart,
         position,
       });
     }
@@ -34,6 +35,7 @@ export async function loadSymbolTrades(symbol) {
         symbol,
         price: group.price,
         quantity: group.quantity,
+        showOnChart: group.show_on_chart,
         group,
         positions: group.parts.map((part) => coin.positions.find((p) => p.id === part.position_id)).filter(Boolean),
       });

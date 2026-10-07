@@ -7,11 +7,18 @@ import { t } from "../../i18n";
 const PAGE = 500;            // candles per request
 const POLL_MS = 30_000;      // refresh of the last candles (the backend caches live candles for 30 s)
 const LOAD_MORE_AT = 20;     // load older history when fewer bars than this remain on the left
-const STEP = { "1m": 60, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400, "1d": 86400 };
+// With a price the arrow points exactly at it (BUY from below, SELL from above); without one it sits under/over the bar.
 const MARKER_STYLE = {
-  BUY: { position: "belowBar", shape: "arrowUp", color: "#34d399" },
-  SELL: { position: "aboveBar", shape: "arrowDown", color: "#f87171" },
+  BUY: { position: "belowBar", pricePosition: "atPriceTop", shape: "arrowUp", color: "#34d399" },
+  SELL: { position: "aboveBar", pricePosition: "atPriceBottom", shape: "arrowDown", color: "#f87171" },
 };
+
+function toMarker(m, time) {
+  const { pricePosition, ...style } = MARKER_STYLE[m.side];
+  const marker = { ...style, time, text: m.text ?? m.side, id: m.id };
+  if (m.price != null) Object.assign(marker, { position: pricePosition, price: Number(m.price) });
+  return marker;
+}
 
 // Lightweight Charts shows times in UTC - shift them so the axis shows local time.
 const toChartTime = (unix) => unix - new Date(unix * 1000).getTimezoneOffset() * 60;
@@ -43,7 +50,8 @@ function priceFormat(price) {
 /**
  * Candlestick chart (TradingView Lightweight Charts) with volume, zoom/pan, lazy loading of older
  * history and periodic refresh of the newest candles.
- * - `markers`: [{ id, side: "BUY" | "SELL", time (unix s), text? }] drawn on the candle containing `time`,
+ * - `markers`: [{ id, side: "BUY" | "SELL", time (unix s), price?, text? }] - drawn on the candle containing the
+ *   real trade time, at the real trade price (not the candle price),
  * - `onMarkerClick(markers)`: called with all markers of the clicked candle,
  * - `focusTime` (unix s): scrolls the chart to that moment (when it is within the loaded history),
  * - `onReady(api)`: exposes the chart and series so callers can add indicators,
@@ -90,32 +98,46 @@ export default function CandleChart({ symbol, interval, markers = [], onMarkerCl
     const volume = chart.addSeries(HistogramSeries, { priceFormat: { type: "volume" }, priceScaleId: "" });
     volume.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
     const seriesMarkers = createSeriesMarkers(candles, []);
-    const step = STEP[interval] ?? 3600;
-    // Marker time -> time of the candle that contains it (chart time).
-    const snap = (unix) => toChartTime(Math.floor(unix / step) * step);
-
     let bars = [];
     let oldestUnix = null;
     let loadingOlder = false;
     let noMoreHistory = false;
     let disposed = false;
 
+    // Index of the loaded candle that contains `unix` (works for any interval, incl. weeks/months).
+    const barIndex = (unix) => {
+      let lo = 0;
+      let hi = bars.length - 1;
+      if (hi < 0 || unix < bars[0].unix) return -1;
+      while (lo < hi) {
+        const mid = (lo + hi + 1) >> 1;
+        if (bars[mid].unix <= unix) lo = mid;
+        else hi = mid - 1;
+      }
+      return lo;
+    };
+    // Marker time -> chart time of the candle that contains it (null outside the loaded history).
+    const snap = (unix) => {
+      const i = barIndex(unix);
+      return i < 0 ? null : bars[i].time;
+    };
+
     const applyMarkers = () => {
       if (!bars.length) return;
       const first = bars[0].time;
       const last = bars[bars.length - 1].time;
       const list = markersRef.current
-        .map((m) => ({ ...MARKER_STYLE[m.side], time: snap(m.time), text: m.text ?? m.side, id: m.id }))
-        .filter((m) => m.time >= first && m.time <= last)
+        .map((m) => toMarker(m, snap(m.time)))
+        .filter((m) => m.time !== null && m.time >= first && m.time <= last)
         .sort((a, b) => a.time - b.time);
       seriesMarkers.setMarkers(list);
     };
     applyMarkersRef.current = applyMarkers;
 
     focusRef.current = (unix) => {
-      const time = snap(unix);
-      if (!bars.length || time < bars[0].time) return;
-      chart.timeScale().setVisibleRange({ from: time - 60 * step, to: time + 60 * step });
+      const i = barIndex(unix);
+      if (i < 0) return;
+      chart.timeScale().setVisibleLogicalRange({ from: i - 60, to: i + 60 });
     };
 
     const notifyBars = () => {

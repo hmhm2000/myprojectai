@@ -8,7 +8,7 @@ import pytest
 # Separate database and test settings - must be set before config is imported.
 _tmp_dir = tempfile.mkdtemp(prefix="wallet_tests_")
 os.environ["DATABASE_URL"] = f"sqlite:///{Path(_tmp_dir, 'test.db').as_posix()}"
-os.environ["SECRET_KEY"] = "test-secret"
+os.environ["SECRET_KEY"] = "test-secret-key-for-unit-tests-only-0123456789"
 os.environ["ADMIN_USERNAME"] = "admin"
 os.environ["ADMIN_PASSWORD"] = "admin-password"
 os.environ["ALLOW_REGISTRATION"] = "false"
