@@ -53,6 +53,7 @@ export default function SaleForm({ coin, preselectId = null, group = null, onSub
   const [fee, setFee] = useState(group && toNumber(group.fee_quote) !== 0 ? group.fee_quote : "");
   const [soldAt, setSoldAt] = useState(toLocalInput(group?.sold_at ?? new Date()));
   const [exitReason, setExitReason] = useState(group?.exit_reason ?? "");
+  const [showOnChart, setShowOnChart] = useState(group?.show_on_chart ?? true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -115,6 +116,7 @@ export default function SaleForm({ coin, preselectId = null, group = null, onSub
       fee_quote: parseAmount(fee || "0"),
       sold_at: soldAt,
       exit_reason: exitReason.trim() || null,
+      show_on_chart: showOnChart,
       allocations,
     };
     if (allocations.length === 0) return setError(t("sale.errors.nothingSelected"));
@@ -259,6 +261,10 @@ export default function SaleForm({ coin, preselectId = null, group = null, onSub
           <Field label={t("sale.exitReason")} htmlFor="sf-reason">
             <input id="sf-reason" className="w-full" maxLength={4000} value={exitReason} onChange={(e) => setExitReason(e.target.value)} />
           </Field>
+          <label className="flex items-center gap-2 text-sm text-zinc-400">
+            <input type="checkbox" checked={showOnChart} onChange={(e) => setShowOnChart(e.target.checked)} />
+            {t("chart.trades.showOnChart")}
+          </label>
         </div>
 
         <div className="grid grid-cols-3 gap-2 rounded-xl border border-white/[0.06] bg-ink-800/60 p-3 text-xs">

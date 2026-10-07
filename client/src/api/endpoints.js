@@ -35,6 +35,8 @@ export const portfoliosApi = {
   updatePosition: (id, body) => data(api.put(`/api/positions/${id}`, body)),
   removePosition: (id) => data(api.delete(`/api/positions/${id}`)),
   positionTiming: (id) => data(api.get(`/api/positions/${id}/timing`)),
+  setPositionOnChart: (id, show) => data(api.patch(`/api/positions/${id}/chart`, { show_on_chart: show })),
+  setSaleOnChart: (groupId, show) => data(api.patch(`/api/sale-groups/${groupId}/chart`, { show_on_chart: show })),
 
   reorderPositions: (portfolioId, positionIds) =>
     data(api.put(`/api/portfolios/${portfolioId}/positions/order`, { position_ids: positionIds })),

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from database.db import Base
@@ -45,6 +45,7 @@ class Position(Base):
     target_price = Column(DecimalString, nullable=True)
     stop_loss = Column(DecimalString, nullable=True)
     sort_order = Column(Integer, nullable=False, default=0)  # order set by drag & drop
+    show_on_chart = Column(Boolean, nullable=False, default=True)  # presentation only - never used in calculations
     created_at = Column(DateTime, nullable=False, default=utcnow)
 
     portfolio = relationship("Portfolio", back_populates="positions")
@@ -72,6 +73,7 @@ class Sale(Base):
     fee_quote = Column(DecimalString, nullable=False, default=0)  # fee in quote currency (USDT)
     sold_at = Column(DateTime, nullable=False)
     exit_reason = Column(Text, nullable=True)  # trade journal: why I sold
+    show_on_chart = Column(Boolean, nullable=False, default=True)  # presentation only
     created_at = Column(DateTime, nullable=False, default=utcnow)
 
     position = relationship("Position", back_populates="sales")

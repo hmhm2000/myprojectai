@@ -10,6 +10,8 @@ export default {
     exitReason: "Powód wyjścia",
     plan: "Plan",
     fromPosition: "{{quantity}} z zakupu {{date}} po {{price}}",
+    showOnChart: "Pokaż na wykresie",
+    hideOnChart: "Ukryj na wykresie",
   },
   // Wskaźniki na wykresie (liczone na serwerze).
   indicators: {

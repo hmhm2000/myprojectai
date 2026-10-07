@@ -24,6 +24,7 @@ export default function PositionForm({ position = null, defaultSymbol = "", onSu
   const [plan, setPlan] = useState(position?.plan ?? "");
   const [targetPrice, setTargetPrice] = useState(position?.target_price ?? "");
   const [stopLoss, setStopLoss] = useState(position?.stop_loss ?? "");
+  const [showOnChart, setShowOnChart] = useState(position?.show_on_chart ?? true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -47,6 +48,7 @@ export default function PositionForm({ position = null, defaultSymbol = "", onSu
       plan: plan.trim() || null,
       target_price: targetPrice.trim() ? parseAmount(targetPrice) : null,
       stop_loss: stopLoss.trim() ? parseAmount(stopLoss) : null,
+      show_on_chart: showOnChart,
     };
     if (!body.symbol) return setError(t("position.errors.chooseCoin"));
     if (!body.buy_price || toNumber(body.buy_price) <= 0) return setError(t("position.errors.invalidPrice"));
@@ -125,6 +127,10 @@ export default function PositionForm({ position = null, defaultSymbol = "", onSu
         <Field label={t("position.journal.plan")} htmlFor="pf-plan">
           <textarea id="pf-plan" className="w-full" rows={2} maxLength={4000} value={plan} onChange={(e) => setPlan(e.target.value)} />
         </Field>
+        <label className="flex items-center gap-2 text-sm text-zinc-400">
+          <input type="checkbox" checked={showOnChart} onChange={(e) => setShowOnChart(e.target.checked)} />
+          {t("chart.trades.showOnChart")}
+        </label>
 
         <div className="grid grid-cols-3 gap-2 rounded-xl border border-white/[0.06] bg-ink-800/60 p-3 text-xs">
           <div>

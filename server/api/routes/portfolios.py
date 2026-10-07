@@ -20,7 +20,7 @@ from database.db import get_db
 from models.portfolio import Portfolio, Position, Sale
 from models.user import User
 from schemas.portfolio import (
-    PortfolioIn, PortfolioListItem, PortfolioOut, PositionIn, PositionOrderIn, PositionTimingOut, SaleIn,
+    PortfolioIn, PortfolioListItem, PortfolioOut, PositionIn, PositionOrderIn, PositionTimingOut, SaleIn, ShowOnChartIn,
 )
 from services.pnl import held_quantity, sold_quantity, split_fee
 from services.portfolio_view import build_list_item, build_portfolio
@@ -98,6 +98,7 @@ def _write_sale_group(db: Session, portfolio: Portfolio, data: SaleIn, group_id:
             fee_quote=fee,
             sold_at=data.sold_at,
             exit_reason=data.exit_reason,
+            show_on_chart=data.show_on_chart,
         ))
 
 
@@ -192,6 +193,16 @@ def get_position_timing(position_id: int, user: User = Depends(get_current_user)
     return position_timing(_get_position(db, position_id, user), candle_service, settings.user_timezone)
 
 
+@router.patch("/positions/{position_id}/chart", response_model=PortfolioOut)
+def set_position_on_chart(position_id: int, data: ShowOnChartIn,
+                          user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Show/hide the purchase on the chart (presentation only - no calculation uses this flag)."""
+    position = _get_position(db, position_id, user)
+    position.show_on_chart = data.show_on_chart
+    db.commit()
+    return _view(db, position.portfolio)
+
+
 @router.delete("/positions/{position_id}", response_model=PortfolioOut)
 def delete_position(position_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     position = _get_position(db, position_id, user)
@@ -218,6 +229,17 @@ def update_sale(group_id: str, data: SaleIn, user: User = Depends(get_current_us
     _write_sale_group(db, portfolio, data, group_id=group_id)
     db.commit()
     return _view(db, portfolio)
+
+
+@router.patch("/sale-groups/{group_id}/chart", response_model=PortfolioOut)
+def set_sale_on_chart(group_id: str, data: ShowOnChartIn,
+                      user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Show/hide the sale on the chart (presentation only)."""
+    sales = _get_sale_group(db, group_id, user)
+    for sale in sales:
+        sale.show_on_chart = data.show_on_chart
+    db.commit()
+    return _view(db, sales[0].position.portfolio)
 
 
 @router.delete("/sale-groups/{group_id}", response_model=PortfolioOut)

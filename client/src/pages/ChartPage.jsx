@@ -9,6 +9,8 @@ import { Pnl } from "../components/ui";
 import { t } from "../i18n";
 import { fmtDateTime, fmtQty, fmtUnitPrice } from "../lib/format";
 import { loadSymbolTrades } from "../lib/symbolTrades";
+import { portfoliosApi } from "../api/endpoints";
+import { EyeIcon } from "../components/icons";
 
 const INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"];
 const INDICATORS_KEY = "chart:indicators";
@@ -116,7 +118,22 @@ export default function ChartPage() {
     };
   }, [symbol]);
 
-  const markers = useMemo(() => events.map(({ id, side, time }) => ({ id, side, time })), [events]);
+  // Only trades marked "show on chart"; the marker uses the real trade time and price.
+  const markers = useMemo(
+    () => events.filter((e) => e.showOnChart).map(({ id, side, time, price }) => ({ id, side, time, price })),
+    [events],
+  );
+
+  const toggleOnChart = async (event) => {
+    const show = !event.showOnChart;
+    setEvents((list) => list.map((e) => (e.id === event.id ? { ...e, showOnChart: show } : e)));
+    try {
+      if (event.side === "BUY") await portfoliosApi.setPositionOnChart(event.position.id, show);
+      else await portfoliosApi.setSaleOnChart(event.group.group_id, show);
+    } catch {
+      setEvents((list) => list.map((e) => (e.id === event.id ? { ...e, showOnChart: !show } : e)));
+    }
+  };
   const selectedEvents = events.filter((e) => selected.includes(e.id));
 
   return (
@@ -171,10 +188,19 @@ export default function ChartPage() {
         ) : (
           <ul className="mt-2 divide-y divide-white/[0.04] text-sm">
             {[...events].reverse().map((event) => (
-              <li key={event.id}>
+              <li key={event.id} className={`flex items-center gap-2 ${event.showOnChart ? "" : "opacity-50"}`}>
                 <button
                   type="button"
-                  className={`flex w-full flex-wrap items-baseline gap-x-3 py-1.5 text-left hover:bg-white/[0.03] ${
+                  className={`btn-icon h-7 w-7 shrink-0 ${event.showOnChart ? "text-neon-green" : ""}`}
+                  title={event.showOnChart ? t("chart.trades.hideOnChart") : t("chart.trades.showOnChart")}
+                  aria-pressed={event.showOnChart}
+                  onClick={() => toggleOnChart(event)}
+                >
+                  <EyeIcon size={14} />
+                </button>
+                <button
+                  type="button"
+                  className={`flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 py-1.5 text-left hover:bg-white/[0.03] ${
                     selected.includes(event.id) ? "bg-white/[0.05]" : ""
                   }`}
                   onClick={() => {

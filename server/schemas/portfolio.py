@@ -62,6 +62,7 @@ class PositionIn(BaseModel):
     plan: JournalText = None
     target_price: OptionalPrice = None
     stop_loss: OptionalPrice = None
+    show_on_chart: bool = True        # presentation only
 
     _symbol = field_validator("symbol")(normalize_symbol)
     _tags = field_validator("tags")(normalize_tags)
@@ -85,6 +86,7 @@ class SaleIn(BaseModel):
     fee_quote: NonNegativeAmount = Decimal(0)   # total fee for the whole sale (USDT)
     sold_at: datetime
     exit_reason: JournalText = None   # trade journal: why I sold
+    show_on_chart: bool = True        # presentation only
     allocations: list[SaleAllocationIn] = Field(min_length=1, max_length=100)
 
     @model_validator(mode="after")
@@ -93,6 +95,10 @@ class SaleIn(BaseModel):
         if len(ids) != len(set(ids)):
             raise PydanticCustomError("duplicate_position", "Each position can appear only once in a sale")
         return self
+
+
+class ShowOnChartIn(BaseModel):
+    show_on_chart: bool
 
 
 class PositionOrderIn(BaseModel):
@@ -113,6 +119,7 @@ class SaleOut(BaseModel):
     fee_quote: Amount
     sold_at: datetime
     exit_reason: Optional[str]
+    show_on_chart: bool
 
 
 class PositionOut(BaseModel):
@@ -127,6 +134,7 @@ class PositionOut(BaseModel):
     plan: Optional[str]
     target_price: Optional[Amount]
     stop_loss: Optional[Amount]
+    show_on_chart: bool
     sort_order: int
     sales: list[SaleOut]
 
