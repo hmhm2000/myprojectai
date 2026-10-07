@@ -19,6 +19,7 @@ const toChartTime = (unix) => unix - new Date(unix * 1000).getTimezoneOffset() *
 function toBars(candles) {
   return candles.map((c) => ({
     time: toChartTime(c.time),
+    unix: c.time,
     open: Number(c.open),
     high: Number(c.high),
     low: Number(c.low),
@@ -45,19 +46,23 @@ function priceFormat(price) {
  * - `markers`: [{ id, side: "BUY" | "SELL", time (unix s), text? }] drawn on the candle containing `time`,
  * - `onMarkerClick(markers)`: called with all markers of the clicked candle,
  * - `focusTime` (unix s): scrolls the chart to that moment (when it is within the loaded history),
- * - `onReady(api)`: exposes the chart and series so callers can add indicators.
+ * - `onReady(api)`: exposes the chart and series so callers can add indicators,
+ * - `onBarsChange({ first, last })`: unix times of the loaded range after every load/refresh,
+ * - `extraPanes`: number of indicator panes below the price (the chart grows ~150 px per pane).
  */
-export default function CandleChart({ symbol, interval, markers = [], onMarkerClick, focusTime = null, onReady }) {
+export default function CandleChart({ symbol, interval, markers = [], onMarkerClick, focusTime = null, onReady, onBarsChange, extraPanes = 0 }) {
   const containerRef = useRef(null);
   const [state, setState] = useState({ loading: true, error: null, source: null });
   // Latest props for the chart callbacks (the chart itself is rebuilt only for a new symbol/interval).
   const markersRef = useRef(markers);
   const clickRef = useRef(onMarkerClick);
   const readyRef = useRef(onReady);
+  const barsChangeRef = useRef(onBarsChange);
   const applyMarkersRef = useRef(() => {});
   const focusRef = useRef(() => {});
   clickRef.current = onMarkerClick;
   readyRef.current = onReady;
+  barsChangeRef.current = onBarsChange;
 
   useEffect(() => {
     markersRef.current = markers;
@@ -113,10 +118,15 @@ export default function CandleChart({ symbol, interval, markers = [], onMarkerCl
       chart.timeScale().setVisibleRange({ from: time - 60 * step, to: time + 60 * step });
     };
 
+    const notifyBars = () => {
+      if (bars.length) barsChangeRef.current?.({ first: bars[0].unix, last: bars[bars.length - 1].unix });
+    };
+
     const setAll = () => {
       candles.setData(bars);
       volume.setData(bars.map(volumeBar));
       applyMarkers();
+      notifyBars();
     };
 
     const loadOlder = async () => {
@@ -152,6 +162,7 @@ export default function CandleChart({ symbol, interval, markers = [], onMarkerCl
           volume.update(volumeBar(bar));
         }
         applyMarkers();
+        notifyBars();
       } catch {
         // keep the chart as is; the next poll will try again
       }
@@ -193,7 +204,7 @@ export default function CandleChart({ symbol, interval, markers = [], onMarkerCl
 
   return (
     <div className="relative">
-      <div ref={containerRef} className="h-[60vh] min-h-[320px] w-full" />
+      <div ref={containerRef} className="min-h-[320px] w-full" style={{ height: `calc(60vh + ${extraPanes * 150}px)` }} />
       {state.loading && <div className="absolute inset-0 grid place-items-center text-sm text-zinc-500">{t("common.loading")}</div>}
       {state.error && <div className="absolute inset-0 grid place-items-center text-sm text-loss">{state.error}</div>}
       {state.source && <div className="mt-1 text-right text-[11px] text-zinc-600">{t("chart.source", { source: state.source })}</div>}

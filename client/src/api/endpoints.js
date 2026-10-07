@@ -50,6 +50,12 @@ export const candlesApi = {
     data(api.get("/api/candles", { params: { symbol, interval, limit, ...(before ? { before } : {}) } })),
 };
 
+export const indicatorsApi = {
+  list: () => data(api.get("/api/indicators")),
+  values: (id, { symbol, interval, start, end, params }) =>
+    data(api.get(`/api/indicators/${id}/values`, { params: { symbol, interval, start, end, params: JSON.stringify(params) } })),
+};
+
 export const journalApi = {
   stats: (portfolioId = null) => data(api.get("/api/journal/stats", { params: portfolioId ? { portfolio_id: portfolioId } : {} })),
 };

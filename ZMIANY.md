@@ -464,3 +464,31 @@ W `locales/pl/index.js` są też format liczb i dat (`pl-PL`) oraz symbol waluty
 - Pod wykresem jest **lista Twoich transakcji** na danym coinie. Kliknięcie wiersza przewija wykres do tej transakcji, o ile mieści się w doładowanej historii.
 - W portfelu przy każdym coinie (po rozwinięciu) jest przycisk **Wykres**, który otwiera wykres tego coina.
 - Backend się nie zmienił: transakcje pochodzą z istniejącego API portfeli.
+
+---
+
+## Etap 15: system wskaźników (SMA, EMA, RSI, MACD, Bollinger Bands, Stochastic)
+
+**Gdzie się liczą:** na serwerze (Python), w jednej implementacji, którą współdzielą wykres, alerty i przyszła analiza. Wykres tylko rysuje wyniki. Twoje wskaźniki z Pine Script też będą tłumaczone na Pythona (decyzja z pytania przed tym etapem).
+
+- `server/indicators/core.py`: podstawowe funkcje zgodne z semantyką Pine:
+  - `ta.sma`: `na`, dopóki okno nie jest pełne;
+  - `ta.ema` i `ta.rma`: start od SMA pierwszego pełnego okna, potem wzór rekurencyjny;
+  - `ta.stdev`: wariant „biased”, jak domyślnie w Pine;
+  - `highest` / `lowest`, `change`, `crossover` / `crossunder`.
+- `server/indicators/builtin.py`: wbudowane wskaźniki, zdefiniowane jak w TradingView:
+  - SMA, EMA;
+  - RSI (rma zysków i strat; same zyski dają 100, same straty 0);
+  - MACD (12/26/9, sygnał to EMA);
+  - Bollinger Bands (20, 2);
+  - Stochastic (14/1/3).
+- **Rozgrzewka:** wskaźnik pobiera dodatkowe świece przed pierwszą wyświetlaną, żeby wynik nie zależał od tego, gdzie zaczyna się historia. RSI potrzebuje ok. 10× okres, bo jego wygładzanie wygasa wolno. Test pilnuje, żeby różnica była poniżej 0,01%.
+- **Nowy wskaźnik** to nowy plik w `server/indicators/custom/` z wywołaniem `register(...)`. Plik ładuje się automatycznie, a wskaźnik pojawia się w API i na liście na wykresie.
+- **API:**
+  - `GET /api/indicators`: lista wskaźników z parametrami, wyjściami i poziomami;
+  - `GET /api/indicators/{id}/values?symbol=&interval=&start=&end=&params={"length":14}`: wartości dla świec z zakresu, `null` = `na`. Pole `closed` oznacza, czy świeca jest już zamknięta.
+- **Na wykresie:** przycisk „+ Wskaźnik” pozwala wybrać wskaźnik i ustawić parametry.
+  - SMA, EMA i BB rysują się na cenie, a RSI, MACD i Stochastic w osobnych panelach pod spodem (z liniami 30/70, 20/80, 0).
+  - Lista aktywnych wskaźników zapamiętuje się w przeglądarce.
+  - Przy doładowaniu starszej historii pobiera się tylko brakujący kawałek wskaźnika, a przy odświeżaniu tylko kilka ostatnich świec.
+- Testy: `server/tests/test_indicators.py`, z wartościami policzonymi ręcznie z definicji Pine, przypadkami brzegowymi i zbieżnością rozgrzewki.

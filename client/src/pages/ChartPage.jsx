@@ -2,12 +2,24 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import CoinPicker from "../components/CoinPicker";
 import CandleChart from "../components/chart/CandleChart";
+import IndicatorPanel from "../components/chart/IndicatorPanel";
+import { useIndicators } from "../components/chart/useIndicators";
+import { indicatorsApi } from "../api/endpoints";
 import { Pnl } from "../components/ui";
 import { t } from "../i18n";
 import { fmtDateTime, fmtQty, fmtUnitPrice } from "../lib/format";
 import { loadSymbolTrades } from "../lib/symbolTrades";
 
 const INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"];
+const INDICATORS_KEY = "chart:indicators";
+
+function readActive() {
+  try {
+    return JSON.parse(localStorage.getItem(INDICATORS_KEY)) ?? [];
+  } catch {
+    return [];
+  }
+}
 
 /** Journal of one BUY or SELL - shown after clicking a marker or a row in the trade list. */
 function TradeEvent({ event }) {
@@ -81,6 +93,18 @@ export default function ChartPage() {
   const [events, setEvents] = useState([]);
   const [selected, setSelected] = useState([]);
   const [focusTime, setFocusTime] = useState(null);
+  const [chartApi, setChartApi] = useState(null);
+  const [definitions, setDefinitions] = useState([]);
+  const [activeIndicators, setActiveIndicators] = useState(readActive);
+  const onBarsChange = useIndicators(chartApi, activeIndicators, definitions, symbol, interval);
+
+  useEffect(() => {
+    indicatorsApi.list().then(setDefinitions).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(INDICATORS_KEY, JSON.stringify(activeIndicators));
+  }, [activeIndicators]);
 
   useEffect(() => {
     let cancelled = false;
@@ -117,6 +141,8 @@ export default function ChartPage() {
         </div>
       </div>
 
+      <IndicatorPanel definitions={definitions} active={activeIndicators} onChange={setActiveIndicators} />
+
       <div className="tile p-2">
         <CandleChart
           symbol={symbol}
@@ -124,6 +150,9 @@ export default function ChartPage() {
           markers={markers}
           focusTime={focusTime}
           onMarkerClick={(hits) => setSelected(hits.map((m) => m.id))}
+          onReady={setChartApi}
+          onBarsChange={onBarsChange}
+          extraPanes={activeIndicators.filter((a) => definitions.find((d) => d.id === a.id)?.pane === "separate").length}
         />
       </div>
 

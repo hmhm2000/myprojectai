@@ -11,6 +11,24 @@ export default {
     plan: "Plan",
     fromPosition: "{{quantity}} z zakupu {{date}} po {{price}}",
   },
+  // Wskaźniki na wykresie (liczone na serwerze).
+  indicators: {
+    add: "+ Wskaźnik",
+    confirm: "Dodaj",
+    remove: "Usuń wskaźnik",
+  },
+  // Nazwy parametrów wskaźników (klucze z backendu).
+  params: {
+    length: "okres",
+    source: "źródło",
+    mult: "mnożnik",
+    fast: "szybka",
+    slow: "wolna",
+    signal: "sygnał",
+    k_length: "%K okres",
+    k_smoothing: "%K wygł.",
+    d_smoothing: "%D wygł.",
+  },
   intervals: {
     "1m": "1m",
     "5m": "5m",
