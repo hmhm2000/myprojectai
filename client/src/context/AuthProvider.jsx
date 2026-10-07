@@ -25,7 +25,7 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false));
   }, []);
 
-  // Interceptor axiosa zgłasza wygaśnięcie tokenu.
+  // The axios interceptor reports an expired token.
   useEffect(() => {
     const onLogout = () => setUser(null);
     window.addEventListener("auth:logout", onLogout);

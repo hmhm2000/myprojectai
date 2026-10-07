@@ -1,14 +1,16 @@
 import { useState } from "react";
 import { errorMessage } from "../api/client";
-import { usePrices } from "../context/contexts";
-import { fmtMoney, fmtPrice, fmtQty, parseAmount, previewMultiply, toLocalInput, toNumber } from "../lib/format";
+import { usePrices, useQuoteCurrency } from "../context/contexts";
+import { t } from "../i18n";
+import { fmtMoney, fmtQty, fmtUnitPrice, parseAmount, previewMultiply, toLocalInput, toNumber } from "../lib/format";
 import CoinPicker from "./CoinPicker";
 import Modal from "./Modal";
 import { DecimalInput, Field, Pnl } from "./ui";
 
-/** Dodanie lub edycja zakupu (pozycji). */
+/** Add or edit a purchase (position). */
 export default function PositionForm({ position = null, defaultSymbol = "", onSubmit, onClose }) {
   const { prices } = usePrices();
+  const currency = useQuoteCurrency();
   const editing = Boolean(position);
   const symbolLocked = editing && position.sales.length > 0;
 
@@ -38,11 +40,11 @@ export default function PositionForm({ position = null, defaultSymbol = "", onSu
       bought_at: boughtAt,
       note: note.trim() || null,
     };
-    if (!body.symbol) return setError("Wybierz coina");
-    if (!body.buy_price || toNumber(body.buy_price) <= 0) return setError("Podaj poprawną cenę zakupu");
-    if (!body.quantity || toNumber(body.quantity) <= 0) return setError("Podaj poprawną ilość");
-    if (body.fee_coin === null) return setError("Podaj poprawną opłatę (lub zostaw puste)");
-    if (toNumber(body.fee_coin) >= toNumber(body.quantity)) return setError("Opłata musi być mniejsza niż ilość");
+    if (!body.symbol) return setError(t("position.errors.chooseCoin"));
+    if (!body.buy_price || toNumber(body.buy_price) <= 0) return setError(t("position.errors.invalidPrice"));
+    if (!body.quantity || toNumber(body.quantity) <= 0) return setError(t("position.errors.invalidQuantity"));
+    if (body.fee_coin === null) return setError(t("position.errors.invalidFee"));
+    if (toNumber(body.fee_coin) >= toNumber(body.quantity)) return setError(t("position.errors.feeTooHigh"));
 
     setBusy(true);
     setError(null);
@@ -56,62 +58,66 @@ export default function PositionForm({ position = null, defaultSymbol = "", onSu
   };
 
   return (
-    <Modal title={editing ? `Edycja zakupu ${position.symbol}` : "Nowy zakup"} onClose={onClose}>
+    <Modal title={editing ? t("position.editTitle", { symbol: position.symbol }) : t("position.newTitle")} onClose={onClose}>
       <form onSubmit={submit} className="space-y-4">
-        <Field label="Coin" htmlFor="pf-symbol" hint={symbolLocked ? "Pozycja ma sprzedaże, więc coina nie można zmienić." : undefined}>
+        <Field label={t("position.coin")} htmlFor="pf-symbol" hint={symbolLocked ? t("position.symbolLocked") : undefined}>
           <CoinPicker id="pf-symbol" value={symbol} onChange={setSymbol} disabled={symbolLocked} autoFocus={!editing && !defaultSymbol} />
         </Field>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field
-            label="Cena zakupu (USDT)"
+            label={t("position.buyPrice", { currency })}
             htmlFor="pf-price"
             hint={
               quote ? (
                 <button type="button" className="text-neon-green hover:underline" onClick={() => setBuyPrice(quote.price)}>
-                  Użyj aktualnej: ${fmtPrice(quote.price)}
+                  {t("position.useCurrent", { price: fmtUnitPrice(quote.price) })}
                 </button>
               ) : undefined
             }
           >
             <DecimalInput id="pf-price" value={buyPrice} onChange={setBuyPrice} placeholder="0.00" autoFocus={Boolean(defaultSymbol) && !editing} />
           </Field>
-          <Field label="Ilość (kupiona)" htmlFor="pf-qty">
+          <Field label={t("position.quantity")} htmlFor="pf-qty">
             <DecimalInput id="pf-qty" value={quantity} onChange={setQuantity} placeholder="0.0" />
           </Field>
-          <Field label={`Opłata (w ${symbol || "coinie"})`} htmlFor="pf-fee" hint="Jak na giełdzie: opłata pobrana z kupionej ilości.">
+          <Field
+            label={t("position.fee", { symbol: symbol || t("position.feeCoinFallback") })}
+            htmlFor="pf-fee"
+            hint={t("position.feeHint")}
+          >
             <DecimalInput id="pf-fee" value={fee} onChange={setFee} placeholder="0" />
           </Field>
-          <Field label="Data zakupu" htmlFor="pf-date">
+          <Field label={t("position.date")} htmlFor="pf-date">
             <input id="pf-date" type="datetime-local" className="w-full" value={boughtAt}
               onChange={(e) => setBoughtAt(e.target.value)} required />
           </Field>
         </div>
 
-        <Field label="Notatka (opcjonalnie)" htmlFor="pf-note">
+        <Field label={t("common.note")} htmlFor="pf-note">
           <textarea id="pf-note" className="w-full" rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />
         </Field>
 
         <div className="grid grid-cols-3 gap-2 rounded-xl border border-white/[0.06] bg-ink-800/60 p-3 text-xs">
           <div>
-            <div className="muted">Koszt</div>
+            <div className="muted">{t("position.preview.cost")}</div>
             <div className="num text-sm text-zinc-200">{cost === null ? "—" : fmtMoney(cost)}</div>
           </div>
           <div>
-            <div className="muted">Na koncie</div>
+            <div className="muted">{t("position.preview.held")}</div>
             <div className="num text-sm text-zinc-200">{held === null ? "—" : fmtQty(held)}</div>
           </div>
           <div className="text-right">
-            <div className="muted">Wynik teraz</div>
+            <div className="muted">{t("position.preview.resultNow")}</div>
             <div className="text-sm">{value !== null && cost !== null ? <Pnl value={value - cost} /> : "—"}</div>
           </div>
         </div>
 
         {error && <p className="text-sm text-loss">{error}</p>}
         <div className="flex justify-end gap-2">
-          <button type="button" className="btn-ghost" onClick={onClose}>Anuluj</button>
+          <button type="button" className="btn-ghost" onClick={onClose}>{t("common.actions.cancel")}</button>
           <button type="submit" className="btn-primary" disabled={busy}>
-            {busy ? "Zapisywanie…" : editing ? "Zapisz zmiany" : "Dodaj zakup"}
+            {busy ? t("common.actions.saving") : editing ? t("common.actions.saveChanges") : t("position.submitNew")}
           </button>
         </div>
       </form>

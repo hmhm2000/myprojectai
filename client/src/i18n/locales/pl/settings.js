@@ -1,0 +1,35 @@
+// Ustawienia: stan cen, konto, użytkownicy (admin).
+export default {
+  prices: {
+    title: "Ceny",
+    quoteCurrency: "Waluta kwotowania",
+    ttl: "Cache (TTL)",
+    ttlValue: "{{minutes}} min",
+    coinsAvailable: "Dostępnych coinów",
+    ok: "OK",
+    stale: "nieaktualne",
+    pairs: "{{count}} par",
+    hint: "TTL, limit odświeżania i walutę zmienisz w {{file}} ({{keys}}).",
+  },
+  account: {
+    title: "Konto",
+    username: "Użytkownik",
+    email: "E-mail",
+    role: "Rola",
+    roleAdmin: "admin",
+    roleUser: "użytkownik",
+    registration: "Rejestracja nowych kont",
+    enabled: "włączona",
+    disabled: "wyłączona",
+    apiServer: "Serwer API",
+    registrationHint: "Rejestrację włączysz w {{file}}: {{setting}}.",
+  },
+  users: {
+    title: "Użytkownicy",
+    username: "Użytkownik",
+    email: "E-mail",
+    role: "Rola",
+    grantAdmin: "Nadaj admina",
+    revokeAdmin: "Odbierz admina",
+  },
+};

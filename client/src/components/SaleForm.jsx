@@ -1,13 +1,15 @@
 import { useMemo, useState } from "react";
 import { errorMessage } from "../api/client";
+import { useQuoteCurrency } from "../context/contexts";
+import { t } from "../i18n";
 import * as dec from "../lib/decimal";
-import { fmtDate, fmtMoney, fmtPct, fmtPrice, fmtQty, parseAmount, pnlTone, toLocalInput, toNumber } from "../lib/format";
+import { fmtDate, fmtMoney, fmtPct, fmtQty, fmtUnitPrice, parseAmount, pnlTone, toLocalInput, toNumber } from "../lib/format";
 import Modal from "./Modal";
 import { DecimalInput, Field, Pnl } from "./ui";
 
 /**
- * Rozdziela łączną ilość na zaznaczone pozycje w kolejności zaznaczania:
- * pierwsza zaznaczona dostaje tyle, ile ma (lub ile zostało), potem kolejna itd.
+ * Split the total quantity across the selected positions in selection order:
+ * the first selected one gets as much as it has (or what's left), then the next one, etc.
  */
 function distribute(total, selectedIds, available) {
   let remaining = total;
@@ -21,18 +23,19 @@ function distribute(total, selectedIds, available) {
 }
 
 /**
- * Sprzedaż z jednej lub kilku pozycji tego samego coina.
- * - zaznacz pozycje (kolejność zaznaczania = kolejność "zużywania"),
- * - wpisz łączną ilość -> rozdzieli się automatycznie; ilość przy pozycji można poprawić ręcznie.
+ * A sale from one or several positions of the same coin.
+ * - select positions (selection order = order in which they are "used up"),
+ * - enter the total quantity -> it is split automatically; the per-position quantity can be edited manually.
  */
 export default function SaleForm({ coin, preselectId = null, group = null, onSubmit, onClose }) {
+  const currency = useQuoteCurrency();
   const editing = Boolean(group);
   const groupQty = useMemo(
     () => Object.fromEntries((group?.parts ?? []).map((p) => [p.position_id, p.quantity])),
     [group],
   );
 
-  // Do wyboru: otwarte pozycje + (przy edycji) pozycje z tej sprzedaży, nawet jeśli już zamknięte.
+  // Choices: open positions + (when editing) positions of this sale, even if already closed.
   const choices = useMemo(() => coin.positions.filter((p) => !p.is_closed || groupQty[p.id]), [coin, groupQty]);
   const available = useMemo(
     () => Object.fromEntries(choices.map((p) => [p.id, dec.add(p.open_quantity, groupQty[p.id] ?? "0")])),
@@ -70,7 +73,7 @@ export default function SaleForm({ coin, preselectId = null, group = null, onSub
     if (!manual && totalAmount) {
       setQuantities(distribute(totalAmount, next, available));
     } else if (!selected.includes(id) && !totalAmount) {
-      // Bez wpisanej ilości: zaznaczenie = sprzedaj całą pozycję.
+      // No total entered: selecting a position means selling all of it.
       setQuantities((q) => ({ ...q, [id]: available[id] }));
       setManual(true);
     }
@@ -87,7 +90,7 @@ export default function SaleForm({ coin, preselectId = null, group = null, onSub
     setQuantities(Object.fromEntries(selected.map((id) => [id, available[id]])));
   };
 
-  // Podgląd wyniku (tylko wyświetlanie - właściwe liczenie robi backend).
+  // Result preview (display only - the backend does the real calculation).
   const priceNumber = toNumber(parseAmount(price));
   const feeNumber = toNumber(parseAmount(fee || "0")) ?? 0;
   const allocatedNumber = toNumber(allocatedTotal) || 0;
@@ -114,14 +117,14 @@ export default function SaleForm({ coin, preselectId = null, group = null, onSub
       note: note.trim() || null,
       allocations,
     };
-    if (allocations.length === 0) return setError("Zaznacz pozycje i podaj ilość do sprzedaży");
+    if (allocations.length === 0) return setError(t("sale.errors.nothingSelected"));
     if (selected.some((id) => quantities[id] && parseAmount(quantities[id]) === null)) {
-      return setError("Popraw ilość przy zaznaczonych pozycjach");
+      return setError(t("sale.errors.invalidQuantity"));
     }
     const tooMuch = allocations.find((a) => dec.cmp(a.quantity, available[a.position_id]) > 0);
-    if (tooMuch) return setError(`Z jednej z pozycji chcesz sprzedać więcej niż ${fmtQty(available[tooMuch.position_id])}`);
-    if (!body.price || toNumber(body.price) <= 0) return setError("Podaj poprawną cenę sprzedaży");
-    if (body.fee_quote === null) return setError("Podaj poprawną opłatę (lub zostaw puste)");
+    if (tooMuch) return setError(t("sale.errors.tooMuch", { amount: fmtQty(available[tooMuch.position_id]) }));
+    if (!body.price || toNumber(body.price) <= 0) return setError(t("sale.errors.invalidPrice"));
+    if (body.fee_quote === null) return setError(t("sale.errors.invalidFee"));
 
     setBusy(true);
     setError(null);
@@ -137,19 +140,23 @@ export default function SaleForm({ coin, preselectId = null, group = null, onSub
   const shortage = totalAmount && !manual && dec.cmp(totalAmount, selectedAvailable) > 0;
 
   return (
-    <Modal title={editing ? `Edycja sprzedaży ${coin.symbol}` : `Sprzedaż ${coin.symbol}`} onClose={onClose} wide>
+    <Modal
+      title={editing ? t("sale.editTitle", { symbol: coin.symbol }) : t("sale.newTitle", { symbol: coin.symbol })}
+      onClose={onClose}
+      wide
+    >
       <form onSubmit={submit} className="space-y-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Field
-            label={`Ilość łącznie (${coin.symbol})`}
+            label={t("sale.totalQuantity", { symbol: coin.symbol })}
             htmlFor="sf-total"
             hint={
               selected.length > 0 ? (
                 <button type="button" className="text-neon-green hover:underline" onClick={sellAll}>
-                  Całe zaznaczone: {fmtQty(selectedAvailable)}
+                  {t("sale.sellAllSelected", { amount: fmtQty(selectedAvailable) })}
                 </button>
               ) : (
-                "Zaznacz pozycje poniżej"
+                t("sale.selectPositionsHint")
               )
             }
           >
@@ -162,31 +169,32 @@ export default function SaleForm({ coin, preselectId = null, group = null, onSub
             />
           </Field>
           <Field
-            label="Cena sprzedaży (USDT)"
+            label={t("sale.price", { currency })}
             htmlFor="sf-price"
             hint={coin.price ? (
               <button type="button" className="text-neon-green hover:underline" onClick={() => setPrice(coin.price.price)}>
-                Użyj aktualnej: ${fmtPrice(coin.price.price)}
+                {t("sale.useCurrent", { price: fmtUnitPrice(coin.price.price) })}
               </button>
             ) : undefined}
           >
             <DecimalInput id="sf-price" value={price} onChange={setPrice} />
           </Field>
-          <Field label="Opłata łącznie (USDT)" htmlFor="sf-fee" hint="Rozdzielana proporcjonalnie do ilości.">
+          <Field label={t("sale.fee", { currency })} htmlFor="sf-fee" hint={t("sale.feeHint")}>
             <DecimalInput id="sf-fee" value={fee} onChange={setFee} placeholder="0" />
           </Field>
         </div>
 
         <div>
           <div className="label flex items-center justify-between">
-            <span>Z których pozycji</span>
-            <span className="normal-case tracking-normal text-zinc-500">kolejność zaznaczania = kolejność rozdziału</span>
+            <span>{t("sale.positions")}</span>
+            <span className="normal-case tracking-normal text-zinc-500">{t("sale.orderHint")}</span>
           </div>
           <div className="space-y-1.5">
             {choices.map((position) => {
               const order = selected.indexOf(position.id);
               const isSelected = order !== -1;
               const row = preview.find((p) => p.id === position.id);
+              const date = fmtDate(position.bought_at);
               return (
                 <div
                   key={position.id}
@@ -201,17 +209,17 @@ export default function SaleForm({ coin, preselectId = null, group = null, onSub
                       isSelected ? "border-neon-green bg-neon-green text-ink-950" : "border-white/20 text-transparent hover:border-white/40"
                     }`}
                     aria-pressed={isSelected}
-                    aria-label={`Zaznacz pozycję z ${fmtDate(position.bought_at)}`}
+                    aria-label={t("sale.selectPosition", { date })}
                   >
                     {isSelected ? order + 1 : ""}
                   </button>
                   <button type="button" onClick={() => toggle(position.id)} className="min-w-0 text-left">
                     <div className="text-sm text-zinc-200">
-                      {fmtDate(position.bought_at)} · <span className="num">${fmtPrice(position.buy_price)}</span>
-                      {position.note && <span className="ml-2 text-xs italic text-zinc-500">„{position.note}”</span>}
+                      {date} · <span className="num">{fmtUnitPrice(position.buy_price)}</span>
+                      {position.note && <span className="ml-2 text-xs italic text-zinc-500">{t("common.quoted", { text: position.note })}</span>}
                     </div>
                     <div className="num text-xs text-zinc-500">
-                      dostępne {fmtQty(available[position.id])} · teraz{" "}
+                      {t("sale.available", { amount: fmtQty(available[position.id]) })} · {t("sale.now")}{" "}
                       <span className={pnlTone(position.total_pnl_pct)}>{fmtPct(position.total_pnl_pct)}</span>
                     </div>
                   </button>
@@ -228,7 +236,7 @@ export default function SaleForm({ coin, preselectId = null, group = null, onSub
                       onChange={(value) => setPositionQty(position.id, value)}
                       disabled={!isSelected}
                       placeholder={isSelected ? "0" : "—"}
-                      aria-label={`Ilość z pozycji ${fmtDate(position.bought_at)}`}
+                      aria-label={t("sale.quantityFor", { date })}
                       className="py-1.5 text-sm"
                     />
                   </div>
@@ -238,41 +246,41 @@ export default function SaleForm({ coin, preselectId = null, group = null, onSub
           </div>
           {shortage && (
             <p className="mt-2 text-xs text-amber-300">
-              Zaznaczone pozycje mają razem tylko {fmtQty(selectedAvailable)} {coin.symbol}. Zaznacz kolejną pozycję albo zmniejsz ilość.
+              {t("sale.shortage", { amount: fmtQty(selectedAvailable), symbol: coin.symbol })}
             </p>
           )}
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Data sprzedaży" htmlFor="sf-date">
+          <Field label={t("sale.date")} htmlFor="sf-date">
             <input id="sf-date" type="datetime-local" className="w-full" value={soldAt}
               onChange={(e) => setSoldAt(e.target.value)} required />
           </Field>
-          <Field label="Notatka (opcjonalnie)" htmlFor="sf-note">
+          <Field label={t("common.note")} htmlFor="sf-note">
             <input id="sf-note" className="w-full" maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />
           </Field>
         </div>
 
         <div className="grid grid-cols-3 gap-2 rounded-xl border border-white/[0.06] bg-ink-800/60 p-3 text-xs">
           <div>
-            <div className="muted">Sprzedajesz</div>
+            <div className="muted">{t("sale.preview.selling")}</div>
             <div className="num text-sm text-zinc-200">{fmtQty(allocatedTotal)} {coin.symbol}</div>
           </div>
           <div>
-            <div className="muted">Przychód po opłacie</div>
+            <div className="muted">{t("sale.preview.proceeds")}</div>
             <div className="num text-sm text-zinc-200">{proceeds === null || !allocatedNumber ? "—" : fmtMoney(proceeds)}</div>
           </div>
           <div className="text-right">
-            <div className="muted">Zysk na tej sprzedaży</div>
+            <div className="muted">{t("sale.preview.pnl")}</div>
             <div className="text-sm">{previewPnl !== null && allocatedNumber ? <Pnl value={previewPnl} /> : "—"}</div>
           </div>
         </div>
 
         {error && <p className="text-sm text-loss">{error}</p>}
         <div className="flex justify-end gap-2">
-          <button type="button" className="btn-ghost" onClick={onClose}>Anuluj</button>
+          <button type="button" className="btn-ghost" onClick={onClose}>{t("common.actions.cancel")}</button>
           <button type="submit" className="btn-green" disabled={busy}>
-            {busy ? "Zapisywanie…" : editing ? "Zapisz zmiany" : "Zapisz sprzedaż"}
+            {busy ? t("common.actions.saving") : editing ? t("common.actions.saveChanges") : t("sale.submitNew")}
           </button>
         </div>
       </form>

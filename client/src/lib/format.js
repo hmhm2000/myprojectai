@@ -1,7 +1,7 @@
-// Backend liczy wszystko w Decimal i zwraca kwoty jako stringi.
-// Tu tylko formatujemy je do wyświetlenia.
+// The backend calculates everything in Decimal and returns amounts as strings.
+// This module only formats them for display (locale and currency symbol come from i18n).
+import { CURRENCY_SYMBOL, LOCALE_TAG as LOCALE } from "../i18n";
 
-const LOCALE = "pl-PL";
 const formatters = new Map();
 
 function nf(minimumFractionDigits, maximumFractionDigits) {
@@ -20,7 +20,7 @@ export function toNumber(value) {
 
 const DASH = "—";
 
-/** Cena coina: liczba miejsc po przecinku zależy od wielkości (BTC vs memecoiny). */
+/** Coin price: number of decimals depends on magnitude (BTC vs memecoins). */
 export function fmtPrice(value) {
   const n = toNumber(value);
   if (n === null) return DASH;
@@ -32,17 +32,22 @@ export function fmtPrice(value) {
   return new Intl.NumberFormat(LOCALE, { maximumSignificantDigits: 4 }).format(n);
 }
 
-/** Kwota w USDT (wartość, koszt, zysk). */
+/** Coin price with the currency symbol, e.g. "$85 654,30". */
+export function fmtUnitPrice(value) {
+  return toNumber(value) === null ? DASH : `${CURRENCY_SYMBOL}${fmtPrice(value)}`;
+}
+
+/** Amount in the quote currency (value, cost, profit). */
 export function fmtMoney(value, { signed = false } = {}) {
   const n = toNumber(value);
   if (n === null) return DASH;
   const abs = Math.abs(n);
   const body = abs !== 0 && abs < 1 ? nf(2, 4).format(abs) : nf(2, 2).format(abs);
   const sign = n < 0 ? "−" : signed && n > 0 ? "+" : "";
-  return `${sign}$${body}`;
+  return `${sign}${CURRENCY_SYMBOL}${body}`;
 }
 
-/** Ilość coina: do 8 miejsc, bez zbędnych zer. */
+/** Coin quantity: up to 8 decimals, no trailing zeros. */
 export function fmtQty(value) {
   const n = toNumber(value);
   if (n === null) return DASH;
@@ -56,7 +61,7 @@ export function fmtPct(value, { signed = true } = {}) {
   return `${sign}${nf(2, 2).format(Math.abs(n))}%`;
 }
 
-/** Klasa koloru: zysk zielony, strata czerwona. */
+/** Color class: profit green, loss red. */
 export function pnlTone(value) {
   const n = toNumber(value);
   if (n === null || n === 0) return "text-zinc-300";
@@ -84,23 +89,23 @@ export function fmtTime(value) {
   return new Date(value).toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
-// ------------------------------------------------------------------ formularze
+// ------------------------------------------------------------------ forms
 
-/** "0,5" / " 1.25 " -> "0.5" / "1.25"; null gdy to nie jest poprawna liczba >= 0. */
+/** "0,5" / " 1.25 " -> "0.5" / "1.25"; null when it is not a valid number >= 0. */
 export function parseAmount(input) {
   const text = String(input ?? "").trim().replace(/\s/g, "").replace(",", ".");
   if (!/^(\d+\.?\d*|\.\d+)$/.test(text)) return null;
   return text.startsWith(".") ? `0${text}` : text.replace(/\.$/, "");
 }
 
-/** Wartość do <input type="datetime-local"> w czasie lokalnym. */
+/** Value for <input type="datetime-local"> in local time. */
 export function toLocalInput(date = new Date()) {
   const d = new Date(date);
   const pad = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-/** Iloczyn do podglądu w formularzu (tylko wyświetlanie; właściwe liczenie robi backend). */
+/** Product for form previews (display only; the backend does the real calculation). */
 export function previewMultiply(a, b) {
   const x = toNumber(parseAmount(a));
   const y = toNumber(parseAmount(b));

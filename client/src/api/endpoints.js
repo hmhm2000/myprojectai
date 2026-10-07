@@ -38,7 +38,7 @@ export const portfoliosApi = {
   reorderPositions: (portfolioId, positionIds) =>
     data(api.put(`/api/portfolios/${portfolioId}/positions/order`, { position_ids: positionIds })),
 
-  // Sprzedaż = grupa: cena, data, łączna opłata + podział na pozycje (allocations).
+  // A sale = group: price, date, total fee + split across positions (allocations).
   addSale: (portfolioId, body) => data(api.post(`/api/portfolios/${portfolioId}/sales`, body)),
   updateSale: (groupId, body) => data(api.put(`/api/sale-groups/${groupId}`, body)),
   removeSale: (groupId) => data(api.delete(`/api/sale-groups/${groupId}`)),

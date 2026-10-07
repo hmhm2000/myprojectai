@@ -1,0 +1,33 @@
+// Formularz sprzedaży (z jednej lub kilku pozycji).
+export default {
+  newTitle: "Sprzedaż {{symbol}}",
+  editTitle: "Edycja sprzedaży {{symbol}}",
+  totalQuantity: "Ilość łącznie ({{symbol}})",
+  sellAllSelected: "Całe zaznaczone: {{amount}}",
+  selectPositionsHint: "Zaznacz pozycje poniżej",
+  price: "Cena sprzedaży ({{currency}})",
+  useCurrent: "Użyj aktualnej: {{price}}",
+  fee: "Opłata łącznie ({{currency}})",
+  feeHint: "Rozdzielana proporcjonalnie do ilości.",
+  positions: "Z których pozycji",
+  orderHint: "kolejność zaznaczania = kolejność rozdziału",
+  available: "dostępne {{amount}}",
+  now: "teraz",
+  selectPosition: "Zaznacz pozycję z {{date}}",
+  quantityFor: "Ilość z pozycji {{date}}",
+  shortage: "Zaznaczone pozycje mają razem tylko {{amount}} {{symbol}}. Zaznacz kolejną pozycję albo zmniejsz ilość.",
+  date: "Data sprzedaży",
+  preview: {
+    selling: "Sprzedajesz",
+    proceeds: "Przychód po opłacie",
+    pnl: "Zysk na tej sprzedaży",
+  },
+  submitNew: "Zapisz sprzedaż",
+  errors: {
+    nothingSelected: "Zaznacz pozycje i podaj ilość do sprzedaży",
+    invalidQuantity: "Popraw ilość przy zaznaczonych pozycjach",
+    tooMuch: "Z jednej z pozycji chcesz sprzedać więcej niż {{amount}}",
+    invalidPrice: "Podaj poprawną cenę sprzedaży",
+    invalidFee: "Podaj poprawną opłatę (lub zostaw puste)",
+  },
+};

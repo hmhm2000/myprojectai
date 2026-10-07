@@ -1,13 +1,13 @@
 import { useMemo } from "react";
-import { fmtMoney, fmtPrice, fmtQty, toNumber } from "../../lib/format";
-import { SORT_OPTIONS, sortPositions } from "../../lib/positionSort";
+import { t } from "../../i18n";
+import { fmtMoney, fmtQty, fmtUnitPrice, toNumber } from "../../lib/format";
+import { SORT_MODES, sortPositions } from "../../lib/positionSort";
 import { collectSaleGroups } from "../../lib/saleGroups";
+import { sourceName } from "../../lib/sources";
 import { ChevronIcon, PlusIcon, SellIcon } from "../icons";
 import { Change24h, CoinBadge, Pnl } from "../ui";
 import PositionRow from "./PositionRow";
 import { useDragSort } from "./useDragSort";
-
-const SOURCE_NAMES = { okx: "OKX", bybit: "Bybit" };
 
 function Cell({ label, children, className = "" }) {
   return (
@@ -18,7 +18,7 @@ function Cell({ label, children, className = "" }) {
   );
 }
 
-/** Coin w portfelu (suma pozycji); po rozwinięciu lista zakupów z osobnym wynikiem. */
+/** A coin in the portfolio (sum of positions); expands into the list of purchases with individual results. */
 export default function CoinRow({ coin, expanded, onToggle, actions, showClosed, sortMode, onSortChange }) {
   const onlyClosed = coin.open_positions === 0;
   const saleGroups = useMemo(() => collectSaleGroups(coin), [coin]);
@@ -30,7 +30,7 @@ export default function CoinRow({ coin, expanded, onToggle, actions, showClosed,
   const byId = useMemo(() => new Map(coin.positions.map((p) => [p.id, p])), [coin]);
   const hiddenClosed = showClosed ? 0 : coin.closed_positions;
 
-  // Przeciągnięcie zapisuje widoczną kolejność jako "własną"; ukryte (zamknięte) zostają na końcu.
+  // Dropping saves the visible order as the "custom" one; hidden (closed) positions stay at the end.
   const { orderedIds, draggingId, register, handleProps } = useDragSort(
     visible.map((p) => p.id),
     (ids) => {
@@ -53,54 +53,55 @@ export default function CoinRow({ coin, expanded, onToggle, actions, showClosed,
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="font-semibold text-zinc-50">{coin.symbol}</span>
-              {coin.price && <span className="chip">{SOURCE_NAMES[coin.price.source] ?? coin.price.source}</span>}
+              {coin.price && <span className="chip">{sourceName(coin.price.source)}</span>}
             </div>
             <div className="flex items-center gap-2 text-sm">
               {coin.price ? (
                 <>
-                  <span className="num text-zinc-300">${fmtPrice(coin.price.price)}</span>
+                  <span className="num text-zinc-300">{fmtUnitPrice(coin.price.price)}</span>
                   <Change24h value={coin.price.change_24h_pct} />
                 </>
               ) : (
-                <span className="text-xs text-amber-300">brak ceny</span>
+                <span className="text-xs text-amber-300">{t("coins.noPrice")}</span>
               )}
             </div>
           </div>
           <ChevronIcon className={`ml-auto shrink-0 text-zinc-500 transition-transform duration-300 md:hidden ${expanded ? "rotate-180" : ""}`} />
         </div>
 
-        <Cell label="Ilość">
+        <Cell label={t("portfolio.columns.quantity")}>
           <span className="num text-zinc-200">{onlyClosed ? "0" : fmtQty(coin.open_quantity)}</span>
           <div className="text-[11px] text-zinc-500">
-            {coin.open_positions} otw.{coin.closed_positions > 0 && ` · ${coin.closed_positions} zamk.`}
+            {t("portfolio.coin.openCount", { count: coin.open_positions })}
+            {coin.closed_positions > 0 && ` · ${t("portfolio.coin.closedCount", { count: coin.closed_positions })}`}
           </div>
         </Cell>
-        <Cell label="Śr. cena zakupu">
-          <span className="num text-zinc-200">{coin.avg_buy_price ? `$${fmtPrice(coin.avg_buy_price)}` : "—"}</span>
+        <Cell label={t("portfolio.columns.avgBuyPrice")}>
+          <span className="num text-zinc-200">{coin.avg_buy_price ? fmtUnitPrice(coin.avg_buy_price) : "—"}</span>
           {coin.break_even_price && coin.break_even_price !== coin.avg_buy_price && (
-            <div className="num text-[11px] text-zinc-500" title="Koszt otwartej części / ilość - z opłatą pobraną w coinie">
-              z opłatą ${fmtPrice(coin.break_even_price)}
+            <div className="num text-[11px] text-zinc-500" title={t("portfolio.coin.withFeeHint")}>
+              {t("portfolio.coin.withFee", { price: fmtUnitPrice(coin.break_even_price) })}
             </div>
           )}
         </Cell>
-        <Cell label="Wartość">
+        <Cell label={t("portfolio.columns.value")}>
           <span className="num text-zinc-100">{fmtMoney(coin.value)}</span>
         </Cell>
-        <Cell label="Zainwestowane">
+        <Cell label={t("portfolio.columns.invested")}>
           <span className="num text-zinc-400">{fmtMoney(coin.invested)}</span>
         </Cell>
-        <Cell label="Zysk / strata" className="md:text-right">
+        <Cell label={t("portfolio.columns.pnl")} className="md:text-right">
           {onlyClosed ? (
             <div>
               <Pnl value={coin.total_pnl} pct={coin.total_pnl_pct} stacked />
-              <div className="text-[11px] text-zinc-500">zamknięte</div>
+              <div className="text-[11px] text-zinc-500">{t("portfolio.coin.closedLabel")}</div>
             </div>
           ) : (
             <div>
               <Pnl value={coin.unrealized_pnl} pct={coin.unrealized_pnl_pct} stacked />
               {toNumber(coin.realized_pnl) !== 0 && (
                 <div className="text-[11px] text-zinc-500">
-                  ogólny: <Pnl value={coin.total_pnl} className="text-[11px]" />
+                  {t("portfolio.coin.overall")} <Pnl value={coin.total_pnl} className="text-[11px]" />
                 </div>
               )}
             </div>
@@ -114,30 +115,31 @@ export default function CoinRow({ coin, expanded, onToggle, actions, showClosed,
           <div className="space-y-2 border-t border-white/[0.05] px-3 pb-3 pt-3 sm:px-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <label className="flex items-center gap-2 text-xs text-zinc-500">
-                Sortuj
+                {t("portfolio.coin.sortLabel")}
                 <select
                   className="py-1 text-xs"
                   value={sortMode}
                   onChange={(e) => onSortChange(e.target.value)}
                 >
-                  {SORT_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
+                  {SORT_MODES.map((mode) => (
+                    <option key={mode} value={mode}>{t(`portfolio.sort.${mode}`)}</option>
                   ))}
                 </select>
               </label>
               <span className="text-[11px] text-zinc-600">
-                {hiddenClosed > 0 && `${hiddenClosed} zamkniętych ukrytych · `}przeciągnij ⠿, aby ustawić własną kolejność
+                {hiddenClosed > 0 && `${t("portfolio.coin.hiddenClosed", { count: hiddenClosed })} · `}
+                {t("portfolio.coin.dragHint")}
               </span>
             </div>
 
             <div className="hidden grid-cols-[auto_1.1fr_1fr_1.2fr_1fr_1fr_1.4fr_auto] gap-x-4 px-3 text-[10px] uppercase tracking-wider text-zinc-500 lg:grid">
               <span className="w-4" />
-              <span>Data zakupu</span>
-              <span>Cena zakupu</span>
-              <span>Ilość otwarta / na koncie</span>
-              <span>Koszt</span>
-              <span>Wartość</span>
-              <span className="text-right">Zysk / strata</span>
+              <span>{t("portfolio.positionColumns.date")}</span>
+              <span>{t("portfolio.positionColumns.buyPrice")}</span>
+              <span>{t("portfolio.positionColumns.quantity")}</span>
+              <span>{t("portfolio.positionColumns.cost")}</span>
+              <span>{t("portfolio.positionColumns.value")}</span>
+              <span className="text-right">{t("portfolio.positionColumns.pnl")}</span>
               <span className="w-[6.5rem]" />
             </div>
 
@@ -161,22 +163,22 @@ export default function CoinRow({ coin, expanded, onToggle, actions, showClosed,
               );
             })}
             {visible.length === 0 && (
-              <p className="px-1 py-2 text-xs text-zinc-500">Wszystkie pozycje są zamknięte i ukryte.</p>
+              <p className="px-1 py-2 text-xs text-zinc-500">{t("portfolio.coin.allHidden")}</p>
             )}
 
             <div className="flex flex-wrap justify-end gap-2 pt-1">
               {!onlyClosed && (
                 <button type="button" className="btn-ghost text-xs" onClick={() => actions.sell(coin, null)}>
-                  <SellIcon size={14} /> Sprzedaj {coin.symbol}
+                  <SellIcon size={14} /> {t("portfolio.coin.sell", { symbol: coin.symbol })}
                 </button>
               )}
               <button type="button" className="btn-ghost text-xs" onClick={() => actions.addPosition(coin.symbol)}>
-                <PlusIcon size={14} /> Kup {coin.symbol}
+                <PlusIcon size={14} /> {t("portfolio.coin.buy", { symbol: coin.symbol })}
               </button>
             </div>
             {toNumber(coin.realized_pnl) !== 0 && (
               <p className="px-1 text-right text-xs text-zinc-500">
-                Zrealizowany na {coin.symbol} (też z zamkniętych): <Pnl value={coin.realized_pnl} />
+                {t("portfolio.coin.realizedFooter", { symbol: coin.symbol })} <Pnl value={coin.realized_pnl} />
               </p>
             )}
           </div>

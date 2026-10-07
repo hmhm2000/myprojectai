@@ -1,21 +1,13 @@
 import { toNumber } from "./format";
 
-export const SORT_OPTIONS = [
-  { value: "custom", label: "Własna kolejność" },
-  { value: "date_desc", label: "Data zakupu: najnowsze" },
-  { value: "date_asc", label: "Data zakupu: najstarsze" },
-  { value: "price_asc", label: "Cena zakupu: najniższa" },
-  { value: "price_desc", label: "Cena zakupu: najwyższa" },
-  { value: "pnl_desc", label: "Zysk %: najwyższy" },
-  { value: "pnl_asc", label: "Zysk %: najniższy" },
-  { value: "qty_desc", label: "Ilość: największa" },
-];
+// Labels: portfolio.sort.<mode> in the locale files.
+export const SORT_MODES = ["custom", "date_desc", "date_asc", "price_asc", "price_desc", "pnl_desc", "pnl_asc", "qty_desc"];
 
 const byNumber = (get, direction) => (a, b) => {
   const x = get(a);
   const y = get(b);
   if (x === null && y === null) return 0;
-  if (x === null) return 1; // brak wartości zawsze na końcu
+  if (x === null) return 1; // missing values always last
   if (y === null) return -1;
   return direction * (x - y);
 };
@@ -30,7 +22,7 @@ const COMPARATORS = {
   qty_desc: byNumber((p) => toNumber(p.open_quantity), -1),
 };
 
-/** "custom" = kolejność zapisana w bazie (ustawiana przeciąganiem). */
+/** "custom" = order stored in the database (set by drag & drop). */
 export function sortPositions(positions, mode) {
   const compare = COMPARATORS[mode];
   return compare ? [...positions].sort((a, b) => compare(a, b) || a.sort_order - b.sort_order) : positions;

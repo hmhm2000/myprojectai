@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
 import { usePrices } from "../context/contexts";
-import { fmtPrice } from "../lib/format";
+import { t } from "../i18n";
+import { fmtUnitPrice } from "../lib/format";
+import { sourceName } from "../lib/sources";
 import { SearchIcon } from "./icons";
 import { Change24h, CoinBadge } from "./ui";
 
 const POPULAR = ["BTC", "ETH", "SOL", "XRP", "BNB", "DOGE", "ADA", "SUI", "SPX", "PEPE", "LINK", "AVAX", "TON", "TRX"];
-const SOURCE_NAMES = { okx: "OKX", bybit: "Bybit" };
 const LIMIT = 40;
 const NONE = [];
 
@@ -26,8 +27,8 @@ function rank(symbols, query) {
 }
 
 /**
- * Wyszukiwarka coinów z katalogu cen (OKX + Bybit, ten sam cache).
- * Pozwala też wpisać symbol spoza katalogu (wtedy bez aktualnej ceny).
+ * Coin search over the price catalog (OKX + Bybit, same cache).
+ * Also allows a symbol outside the catalog (then without a current price).
  */
 export default function CoinPicker({ value, onChange, disabled = false, autoFocus = false, exclude = NONE, id }) {
   const { prices } = usePrices();
@@ -75,7 +76,7 @@ export default function CoinPicker({ value, onChange, disabled = false, autoFocu
           id={id}
           type="text"
           className="w-full pl-9 uppercase placeholder:normal-case"
-          placeholder="Szukaj coina, np. BTC, SPX…"
+          placeholder={t("coins.picker.placeholder")}
           value={query}
           disabled={disabled}
           autoFocus={autoFocus}
@@ -117,16 +118,17 @@ export default function CoinPicker({ value, onChange, disabled = false, autoFocu
                   <CoinBadge symbol={symbol} size="sm" />
                   {isCustom ? (
                     <span className="text-zinc-300">
-                      Użyj „{symbol}” <span className="text-xs text-amber-300">(brak ceny na OKX/Bybit)</span>
+                      {t("coins.picker.useCustom", { symbol })}{" "}
+                      <span className="text-xs text-amber-300">{t("coins.picker.noPriceOnExchanges")}</span>
                     </span>
                   ) : (
                     <>
                       <span className="flex-1 font-medium text-zinc-100">{symbol}</span>
-                      <span className="num text-zinc-300">${fmtPrice(quote.price)}</span>
+                      <span className="num text-zinc-300">{fmtUnitPrice(quote.price)}</span>
                       <span className="w-16 text-right">
                         <Change24h value={quote.change_24h_pct} />
                       </span>
-                      <span className="chip w-14 justify-center">{SOURCE_NAMES[quote.source] ?? quote.source}</span>
+                      <span className="chip w-14 justify-center">{sourceName(quote.source)}</span>
                     </>
                   )}
                 </button>

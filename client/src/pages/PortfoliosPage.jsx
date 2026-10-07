@@ -11,7 +11,9 @@ import SaleForm from "../components/SaleForm";
 import { EditIcon, EyeIcon, PlusIcon, TrashIcon } from "../components/icons";
 import { EmptyState, ErrorBanner } from "../components/ui";
 import { usePrices } from "../context/contexts";
-import { fmtDate, fmtMoney, fmtPrice, fmtQty } from "../lib/format";
+import { t } from "../i18n";
+import Trans from "../i18n/Trans";
+import { fmtDate, fmtMoney, fmtQty, fmtUnitPrice } from "../lib/format";
 
 const SELECTED_KEY = "portfolio:selected";
 const SHOW_CLOSED_KEY = "positions:showClosed";
@@ -39,14 +41,14 @@ export default function PortfoliosPage() {
   const [expanded, setExpanded] = useState(() => new Set());
   const [modal, setModal] = useState(null);
   const closeModal = useCallback(() => setModal(null), []);
-  // Zamknięte pozycje domyślnie ukryte; sortowanie zapamiętane osobno dla każdego coina.
+  // Closed positions hidden by default; sorting remembered separately for each coin.
   const [showClosed, setShowClosed] = useState(() => readJson(SHOW_CLOSED_KEY, false));
   const [sortModes, setSortModes] = useState(() => readJson(SORT_KEY, {}));
 
   useEffect(() => localStorage.setItem(SHOW_CLOSED_KEY, JSON.stringify(showClosed)), [showClosed]);
   useEffect(() => localStorage.setItem(SORT_KEY, JSON.stringify(sortModes)), [sortModes]);
 
-  // ------------------------------------------------------------- ładowanie
+  // ------------------------------------------------------------- loading
 
   const loadList = useCallback(async () => {
     try {
@@ -54,7 +56,7 @@ export default function PortfoliosPage() {
       setPortfolios(list);
       setSelectedId((current) => (list.some((p) => p.id === current) ? current : list[0]?.id ?? null));
     } catch (err) {
-      setError(errorMessage(err, "Nie udało się wczytać portfeli"));
+      setError(errorMessage(err, "portfolio.page.loadListFailed"));
     }
   }, []);
 
@@ -66,7 +68,7 @@ export default function PortfoliosPage() {
     if (selectedId) localStorage.setItem(SELECTED_KEY, String(selectedId));
   }, [selectedId]);
 
-  // Widok portfela: przy zmianie portfela i gdy backend ma nowe ceny (bez odpytywania giełdy).
+  // Portfolio view: reloaded when the portfolio changes and when the backend has new prices (no exchange calls).
   useEffect(() => {
     if (!selectedId) {
       setView(null);
@@ -76,13 +78,13 @@ export default function PortfoliosPage() {
     portfoliosApi
       .get(selectedId)
       .then((data) => !cancelled && setView(data))
-      .catch((err) => !cancelled && setError(errorMessage(err, "Nie udało się wczytać portfela")));
+      .catch((err) => !cancelled && setError(errorMessage(err, "portfolio.page.loadFailed")));
     return () => {
       cancelled = true;
     };
   }, [selectedId, version]);
 
-  /** Każda zmiana zwraca przeliczony portfel - podmieniamy widok i podsumowanie na liście. */
+  /** Every change returns the recalculated portfolio - replace the view and the summary in the list. */
   const applyView = useCallback((data) => {
     setView(data);
     setPortfolios((list) =>
@@ -102,7 +104,7 @@ export default function PortfoliosPage() {
       return next;
     });
 
-  // ------------------------------------------------------------- akcje
+  // ------------------------------------------------------------- actions
 
   const actions = {
     addPosition: (symbol = "") => setModal({ type: "position", symbol }),
@@ -112,7 +114,7 @@ export default function PortfoliosPage() {
     editSale: (coin, group) => setModal({ type: "sale", coin, group }),
     deleteSale: (coin, group) => setModal({ type: "deleteSale", coin, group }),
     reorder: async (coin, ids) => {
-      // Od razu pokazujemy nową kolejność, potem zapis na serwerze.
+      // Show the new order immediately, then save it on the server.
       const order = new Map(ids.map((id, index) => [id, index]));
       setView((current) => current && {
         ...current,
@@ -125,7 +127,7 @@ export default function PortfoliosPage() {
       try {
         applyView(await portfoliosApi.reorderPositions(selectedId, ids));
       } catch (err) {
-        setError(errorMessage(err, "Nie udało się zapisać kolejności"));
+        setError(errorMessage(err, "portfolio.page.saveOrderFailed"));
         portfoliosApi.get(selectedId).then(applyView).catch(() => {});
       }
     },
@@ -142,8 +144,8 @@ export default function PortfoliosPage() {
       case "createPortfolio":
         return (
           <NameDialog
-            title="Nowy portfel"
-            submitLabel="Utwórz"
+            title={t("portfolio.dialogs.createTitle")}
+            submitLabel={t("common.actions.create")}
             onClose={closeModal}
             onSubmit={async (name) => {
               const created = await portfoliosApi.create(name);
@@ -156,7 +158,7 @@ export default function PortfoliosPage() {
       case "renamePortfolio":
         return (
           <NameDialog
-            title="Zmień nazwę portfela"
+            title={t("portfolio.dialogs.renameTitle")}
             initial={selected?.name}
             onClose={closeModal}
             onSubmit={async (name) => applyView(await portfoliosApi.rename(selectedId, name))}
@@ -165,16 +167,18 @@ export default function PortfoliosPage() {
       case "deletePortfolio":
         return (
           <ConfirmDialog
-            title="Usunąć portfel?"
-            confirmLabel="Usuń portfel"
+            title={t("portfolio.dialogs.deleteTitle")}
+            confirmLabel={t("portfolio.dialogs.deleteConfirm")}
             onClose={closeModal}
             message={
               <>
                 <p>
-                  Portfel <strong className="text-zinc-100">{selected?.name}</strong> zostanie usunięty razem ze wszystkimi
-                  pozycjami ({selected?.positions_count ?? 0}) i sprzedażami.
+                  <Trans
+                    k="portfolio.dialogs.deleteMessage"
+                    values={{ name: <strong className="text-zinc-100">{selected?.name}</strong>, count: selected?.positions_count ?? 0 }}
+                  />
                 </p>
-                <p className="text-loss">Tej operacji nie można cofnąć.</p>
+                <p className="text-loss">{t("portfolio.dialogs.deleteWarning")}</p>
               </>
             }
             onConfirm={async () => {
@@ -202,14 +206,24 @@ export default function PortfoliosPage() {
       case "deletePosition":
         return (
           <ConfirmDialog
-            title="Usunąć zakup?"
+            title={t("portfolio.dialogs.deletePositionTitle")}
             onClose={closeModal}
             message={
-              <p>
-                Zakup <strong className="text-zinc-100">{fmtQty(modal.position.quantity)} {modal.coin.symbol}</strong> po $
-                {fmtPrice(modal.position.buy_price)} z {fmtDate(modal.position.bought_at)}
-                {modal.position.sales.length > 0 && ` oraz jego sprzedaże (${modal.position.sales.length})`} zostanie usunięty.
-              </p>
+              <>
+                <p>
+                  <Trans
+                    k="portfolio.dialogs.deletePositionMessage"
+                    values={{
+                      amount: <strong className="text-zinc-100">{fmtQty(modal.position.quantity)} {modal.coin.symbol}</strong>,
+                      price: fmtUnitPrice(modal.position.buy_price),
+                      date: fmtDate(modal.position.bought_at),
+                    }}
+                  />
+                </p>
+                {modal.position.sales.length > 0 && (
+                  <p>{t("portfolio.dialogs.deletePositionSales", { count: modal.position.sales.length })}</p>
+                )}
+              </>
             }
             onConfirm={async () => applyView(await portfoliosApi.removePosition(modal.position.id))}
           />
@@ -233,15 +247,24 @@ export default function PortfoliosPage() {
       case "deleteSale":
         return (
           <ConfirmDialog
-            title="Usunąć sprzedaż?"
+            title={t("portfolio.dialogs.deleteSaleTitle")}
             onClose={closeModal}
             message={
-              <p>
-                Sprzedaż <strong className="text-zinc-100">{fmtQty(modal.group.quantity)} {modal.coin.symbol}</strong> po $
-                {fmtPrice(modal.group.price)} z {fmtDate(modal.group.sold_at)}
-                {modal.group.parts.length > 1 && ` (z ${modal.group.parts.length} pozycji)`} zostanie usunięta, a ilość wróci do
-                pozycji.
-              </p>
+              <>
+                <p>
+                  <Trans
+                    k="portfolio.dialogs.deleteSaleMessage"
+                    values={{
+                      amount: <strong className="text-zinc-100">{fmtQty(modal.group.quantity)} {modal.coin.symbol}</strong>,
+                      price: fmtUnitPrice(modal.group.price),
+                      date: fmtDate(modal.group.sold_at),
+                    }}
+                  />
+                </p>
+                {modal.group.parts.length > 1 && (
+                  <p>{t("portfolio.dialogs.deleteSaleShared", { count: modal.group.parts.length })}</p>
+                )}
+              </>
             }
             onConfirm={async () => applyView(await portfoliosApi.removeSale(modal.group.group_id))}
           />
@@ -251,15 +274,15 @@ export default function PortfoliosPage() {
     }
   };
 
-  // ------------------------------------------------------------- widok
+  // ------------------------------------------------------------- view
 
   if (portfolios === null) {
-    return error ? <ErrorBanner>{error}</ErrorBanner> : <p className="text-sm text-zinc-500">Ładowanie portfeli…</p>;
+    return error ? <ErrorBanner>{error}</ErrorBanner> : <p className="text-sm text-zinc-500">{t("portfolio.page.loadingList")}</p>;
   }
 
   return (
     <div className="space-y-6">
-      {/* Wybór portfela */}
+      {/* Portfolio selector */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
           {portfolios.map((p) => (
@@ -278,16 +301,16 @@ export default function PortfoliosPage() {
             </button>
           ))}
           <button type="button" className="btn-ghost shrink-0 self-stretch" onClick={() => setModal({ type: "createPortfolio" })}>
-            <PlusIcon size={16} /> Portfel
+            <PlusIcon size={16} /> {t("portfolio.page.newPortfolio")}
           </button>
         </div>
 
         {selected && (
           <div className="flex shrink-0 gap-1">
-            <button type="button" className="btn-icon" title="Zmień nazwę" onClick={() => setModal({ type: "renamePortfolio" })}>
+            <button type="button" className="btn-icon" title={t("portfolio.page.rename")} onClick={() => setModal({ type: "renamePortfolio" })}>
               <EditIcon size={16} />
             </button>
-            <button type="button" className="btn-icon hover:text-loss" title="Usuń portfel" onClick={() => setModal({ type: "deletePortfolio" })}>
+            <button type="button" className="btn-icon hover:text-loss" title={t("portfolio.page.delete")} onClick={() => setModal({ type: "deletePortfolio" })}>
               <TrashIcon size={16} />
             </button>
           </div>
@@ -298,17 +321,17 @@ export default function PortfoliosPage() {
 
       {portfolios.length === 0 ? (
         <EmptyState
-          title="Nie masz jeszcze portfela"
+          title={t("portfolio.empty.noPortfolioTitle")}
           action={
             <button type="button" className="btn-primary" onClick={() => setModal({ type: "createPortfolio" })}>
-              <PlusIcon size={16} /> Utwórz portfel
+              <PlusIcon size={16} /> {t("portfolio.empty.createPortfolio")}
             </button>
           }
         >
-          Portfel grupuje Twoje zakupy. Możesz mieć ich kilka, np. „Długoterminowy” i „Trading”.
+          {t("portfolio.empty.noPortfolioText")}
         </EmptyState>
       ) : !currentView ? (
-        <p className="text-sm text-zinc-500">Ładowanie portfela…</p>
+        <p className="text-sm text-zinc-500">{t("portfolio.page.loadingOne")}</p>
       ) : (
         <>
           <SummaryCards summary={currentView.summary} />
@@ -320,7 +343,7 @@ export default function PortfoliosPage() {
           <section className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
-                Coiny <span className="text-zinc-600">({visibleCoins.length})</span>
+                {t("portfolio.page.coins")} <span className="text-zinc-600">({visibleCoins.length})</span>
               </h2>
               <div className="flex flex-wrap justify-end gap-2">
                 {closedCount > 0 && (
@@ -329,36 +352,32 @@ export default function PortfoliosPage() {
                     className={`btn-ghost ${showClosed ? "border-neon-violet/40 text-zinc-50" : ""}`}
                     onClick={() => setShowClosed((v) => !v)}
                     aria-pressed={showClosed}
-                    title="Zamknięte pozycje są zawsze wliczone do zysku ogólnego"
+                    title={t("portfolio.page.closedHint")}
                   >
-                    <EyeIcon size={16} /> {showClosed ? "Ukryj zamknięte" : `Pokaż zamknięte (${closedCount})`}
+                    <EyeIcon size={16} /> {showClosed ? t("portfolio.page.hideClosed") : t("portfolio.page.showClosed", { count: closedCount })}
                   </button>
                 )}
                 <button type="button" className="btn-primary" onClick={() => actions.addPosition()}>
-                  <PlusIcon size={16} /> Dodaj zakup
+                  <PlusIcon size={16} /> {t("portfolio.page.addPosition")}
                 </button>
               </div>
             </div>
 
             {visibleCoins.length === 0 ? (
               currentView.coins.length > 0 ? (
-                <EmptyState title="Wszystkie pozycje są zamknięte">
-                  Kliknij „Pokaż zamknięte”, aby zobaczyć historię. Ich wynik jest wliczony do zysku ogólnego.
-                </EmptyState>
+                <EmptyState title={t("portfolio.empty.allClosedTitle")}>{t("portfolio.empty.allClosedText")}</EmptyState>
               ) : (
-                <EmptyState title="Portfel jest pusty">
-                  Dodaj pierwszy zakup: coin, cenę, ilość, opłatę i datę. Każdy zakup jest osobną pozycją z własnym wynikiem.
-                </EmptyState>
+                <EmptyState title={t("portfolio.empty.emptyTitle")}>{t("portfolio.empty.emptyText")}</EmptyState>
               )
             ) : (
               <>
                 <div className="hidden grid-cols-[1.5fr_1fr_1.1fr_1fr_1fr_1.3fr_auto] gap-x-4 px-4 text-[10px] uppercase tracking-wider text-zinc-500 md:grid">
-                  <span>Coin</span>
-                  <span>Ilość</span>
-                  <span title="Ważona ilością, która została na otwartych pozycjach">Śr. cena zakupu</span>
-                  <span>Wartość</span>
-                  <span>Zainwestowane</span>
-                  <span className="text-right">Zysk / strata</span>
+                  <span>{t("portfolio.columns.coin")}</span>
+                  <span>{t("portfolio.columns.quantity")}</span>
+                  <span title={t("portfolio.columns.avgBuyPriceHint")}>{t("portfolio.columns.avgBuyPrice")}</span>
+                  <span>{t("portfolio.columns.value")}</span>
+                  <span>{t("portfolio.columns.invested")}</span>
+                  <span className="text-right">{t("portfolio.columns.pnl")}</span>
                   <span className="w-[18px]" />
                 </div>
                 <div className="space-y-3">

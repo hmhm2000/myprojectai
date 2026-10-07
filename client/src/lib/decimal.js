@@ -1,5 +1,5 @@
-// Dokładne działania na kwotach zapisanych jako tekst ("0.1" + "0.2" = "0.3").
-// Używane tam, gdzie front musi coś policzyć zanim wyśle dane (np. podział ilości przy sprzedaży).
+// Exact arithmetic on amounts stored as strings ("0.1" + "0.2" = "0.3").
+// Used where the frontend must calculate before sending data (e.g. splitting a sale quantity).
 
 const SCALE = 18;
 const FACTOR = 10n ** BigInt(SCALE);

@@ -1,4 +1,5 @@
 import { fmtMoney, fmtPct, pnlTone, toNumber } from "../../lib/format";
+import { t } from "../../i18n";
 import { AlertIcon } from "../icons";
 
 function Card({ label, children, sub, glow = "" }) {
@@ -11,7 +12,7 @@ function Card({ label, children, sub, glow = "" }) {
   );
 }
 
-/** Podsumowanie całego portfela: wartość, zainwestowane, zysk/strata. */
+/** Whole-portfolio summary: value, invested, profit/loss. */
 export default function SummaryCards({ summary }) {
   const glowFor = (value) => {
     const n = toNumber(value);
@@ -21,24 +22,24 @@ export default function SummaryCards({ summary }) {
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Card label="Wartość" glow="glow-violet">{fmtMoney(summary.value)}</Card>
-        <Card label="Zainwestowane" sub={<span className="muted">koszt otwartych pozycji</span>}>
+        <Card label={t("portfolio.summary.value")} glow="glow-violet">{fmtMoney(summary.value)}</Card>
+        <Card label={t("portfolio.summary.invested")} sub={<span className="muted">{t("portfolio.summary.investedHint")}</span>}>
           {fmtMoney(summary.invested)}
         </Card>
         <Card
-          label="Zysk otwartych pozycji"
+          label={t("portfolio.summary.openPnl")}
           glow={glowFor(summary.unrealized_pnl)}
           sub={<span className={`num ${pnlTone(summary.unrealized_pnl_pct)}`}>{fmtPct(summary.unrealized_pnl_pct)}</span>}
         >
           <span className={pnlTone(summary.unrealized_pnl)}>{fmtMoney(summary.unrealized_pnl, { signed: true })}</span>
         </Card>
         <Card
-          label="Zysk ogólny"
+          label={t("portfolio.summary.totalPnl")}
           glow={glowFor(summary.total_pnl)}
           sub={
             <span className="muted">
               <span className={`num ${pnlTone(summary.total_pnl_pct)}`}>{fmtPct(summary.total_pnl_pct)}</span>
-              {" · "}w tym zrealizowany:{" "}
+              {" · "}{t("portfolio.summary.includingRealized")}{" "}
               <span className={`num ${pnlTone(summary.realized_pnl)}`}>{fmtMoney(summary.realized_pnl, { signed: true })}</span>
             </span>
           }
@@ -50,7 +51,7 @@ export default function SummaryCards({ summary }) {
       {summary.missing_prices.length > 0 && (
         <div className="flex items-center gap-2 rounded-lg border border-amber-400/20 bg-amber-400/[0.06] px-3 py-2 text-xs text-amber-200">
           <AlertIcon size={16} className="shrink-0 text-amber-400" />
-          Brak aktualnej ceny dla: {summary.missing_prices.join(", ")}. Te coiny nie są wliczone do wartości i zysku.
+          {t("portfolio.summary.missingPrices", { symbols: summary.missing_prices.join(", ") })}
         </div>
       )}
     </div>
