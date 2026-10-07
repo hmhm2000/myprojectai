@@ -163,3 +163,27 @@ def split_fee(fee: Decimal, quantities: list[Decimal]) -> list[Decimal]:
         return [ZERO for _ in quantities]
     parts = [q(fee * quantity / total_quantity) for quantity in quantities[:-1]]
     return parts + [fee - sum(parts, ZERO)]
+
+
+@dataclass(frozen=True)
+class AveragePrices:
+    avg_buy_price: Optional[Decimal]     # średnia cena zakupu otwartych pozycji (ważona pozostałą ilością)
+    break_even_price: Optional[Decimal]  # koszt otwartej części / otwarta ilość (uwzględnia opłatę w coinie)
+
+
+def average_prices(items: Iterable[tuple[PositionLike, PositionMetrics]]) -> AveragePrices:
+    """Średnie dla otwartych pozycji jednego coina.
+
+    Wagą jest ilość, która na pozycji jeszcze została - po sprzedaży (także częściowej)
+    średnia przelicza się sama, a zamknięte pozycje przestają się liczyć.
+    """
+    open_items = [(p, m) for p, m in items if not m.is_closed and m.held_quantity > 0]
+    open_quantity = sum((m.open_quantity for _, m in open_items), ZERO)
+    if open_quantity <= 0:
+        return AveragePrices(None, None)
+    weighted_price = sum((p.buy_price * m.open_quantity for p, m in open_items), ZERO)
+    open_cost = sum((p.buy_price * p.quantity * m.open_quantity / m.held_quantity for p, m in open_items), ZERO)
+    return AveragePrices(
+        avg_buy_price=q(weighted_price / open_quantity),
+        break_even_price=q(open_cost / open_quantity),
+    )

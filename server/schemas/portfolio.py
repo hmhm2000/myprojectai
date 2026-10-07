@@ -130,6 +130,8 @@ class CoinOut(GroupOut):
     symbol: str
     price: Optional[PriceInfo]
     open_quantity: Amount
+    avg_buy_price: Optional[Amount]       # średnia cena zakupu otwartych pozycji
+    break_even_price: Optional[Amount]    # próg rentowności (z opłatą w coinie)
     missing_price: bool
     open_positions: int
     closed_positions: int
