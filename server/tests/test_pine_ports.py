@@ -1,3 +1,4 @@
+import math
 import random
 from decimal import Decimal as D
 
@@ -162,3 +163,113 @@ def test_alert_on_pine_signal(client):
     assert params["os_level"] == -60 and params["wt_channel_len"] == 9          # defaults stored with the alert
     body["condition"]["left"]["output"] = "kd_fill"                             # a fill is not a value
     assert client.post("/api/alerts", json=body, headers=headers).json()["code"] == "alerts.invalid_condition"
+
+
+def test_macd_hist_colors():
+    closes = [100 + 5 * math.sin(i / 6) for i in range(300)]
+    data = OHLCV(list(range(300)), closes, closes, closes, closes, [1.0] * 300)
+    ind = get_indicator("macd_hist")
+    out = ind.compute(data, validate_params(ind, {}))
+    assert out["histogram"] == out["macd"]                               # MT4: histogram = MACD line
+    for i in range(60, 300):
+        h, prev, c = out["histogram"][i], out["histogram"][i - 1], out["histogram:color"][i]
+        expected = 0 if h >= 0 and h > prev else 1 if h >= 0 and h < prev else 2 if h < 0 and h < prev else 3
+        assert c == expected
+
+
+class PerpMarket:
+    """Fake candle service: spot candles from `spot`, perpetual from `perp` (None = not listed)."""
+
+    def __init__(self, spot, perp):
+        self.spot, self.perp = spot, perp
+
+    def get_candles(self, symbol, interval, start, end, max_candles=5000, market="spot"):
+        src = self.perp if market == "perp" else self.spot
+        if src is None:
+            raise AppError(404, "candles.symbol_not_found", "no perp")
+        candles = [Candle(t, D(str(o)), D(str(h)), D(str(l)), D(str(c)), D(str(v)))
+                   for t, o, h, l, c, v in zip(src.time, src.open, src.high, src.low, src.close, src.volume)]
+        return CandleSeries(symbol, interval, "fake", candles)
+
+
+def flat_candles(volumes, bull=True):
+    n = len(volumes)
+    o, c = ([100.0] * n, [101.0] * n) if bull else ([101.0] * n, [100.0] * n)
+    return OHLCV([i * H for i in range(n)], o, [102.0] * n, [99.0] * n, c, list(volumes))
+
+
+def test_pvsra_vector_candles_and_perp_volume():
+    ind = get_indicator("pvsra")
+    spot = flat_candles([10] * 12 + [16, 25, 10])
+    spot.high[12], spot.low[12] = 101.0, 100.0         # narrow candle: 160% volume but spread x volume not the highest
+    perp = flat_candles([10] * 12 + [10, 10, 30], bull=False)
+    now = 20 * H
+
+    def run(spot_data, perp_data, **params):
+        ctx = DataContext(PerpMarket(spot_data, perp_data), "BTC", "1h", now)
+        base = OHLCV(spot_data.time, spot_data.open, spot_data.high, spot_data.low, spot_data.close, spot_data.volume, ctx)
+        return ind.compute(base, validate_params(ind, params))
+
+    own = run(spot, perp, use_perp_volume=False)
+    assert own["volume:color"][12:15] == [2, 0, 4]                 # 160% -> 150 bull, 250% -> 200 bull, normal
+    assert own["rising_bull"][12] == 1.0 and own["peak_bull"][13] == 1.0 and own["vector"][14] == 0.0
+    perp_out = run(spot, perp)                                     # default: the perpetual's volume
+    assert perp_out["volume"][-1] == 30 and perp_out["volume:color"][-1] == 1 and perp_out["peak_bear"][-1] == 1.0
+    fallback = run(spot, None)                                     # no perpetual -> chart's own candles
+    assert fallback["volume"] == own["volume"]
+    hidden = run(spot, None, candle_colors=False)
+    assert set(hidden["candles"]) == {None}
+
+
+def test_oi_rsi_signals(monkeypatch):
+    import services.open_interest as oi_module
+
+    n = 200
+    rising = [100 + i for i in range(n)]                           # price only rises -> RSI 100
+    data_spot = OHLCV([i * H for i in range(n)], rising, rising, rising, rising, [1.0] * n)
+    points = [(i * H, 1000.0 - i) for i in range(n + 1)]           # OI only falls -> OI RSI 0
+
+    calls = []
+    def fake_get(symbol, period, start, end):
+        calls.append((symbol, period))
+        return [p for p in points if start <= p[0] <= end]
+    monkeypatch.setattr(oi_module.open_interest_service, "get", fake_get)
+
+    ctx = DataContext(PerpMarket(data_spot, None), "BTC", "1h", n * H)
+    base = OHLCV(data_spot.time, rising, rising, rising, rising, [1.0] * n, ctx)
+    ind = get_indicator("oi_rsi")
+    out = ind.compute(base, validate_params(ind, {}))
+    assert out["oi_rsi"][-1] == 0 and out["rsi"][-1] == 100
+    assert out["sell"][-1] == 1.0 and out["sell_background"][-1] == 1.0 and out["combined"][-1] == 1.0
+    assert out["buy"][-1] == 0.0
+    assert calls[-1] == ("BTC", "1h")
+    ind.compute(base, validate_params(ind, {"override_symbol": True, "symbol": "eth"}))
+    assert calls[-1] == ("ETH", "1h")
+    no_context = ind.compute(data_spot, validate_params(ind, {}))  # no OI available -> OI lines empty, RSI works
+    assert set(no_context["oi_rsi"]) == {None} and no_context["rsi"][-1] == 100
+
+
+def test_open_interest_close_is_value_at_candle_end(monkeypatch):
+    import services.open_interest as oi_module
+
+    monkeypatch.setattr(oi_module.open_interest_service, "get",
+                        lambda symbol, period, start, end: [(t, float(t // H)) for t in range(0, 10 * H + 1, H)])
+    now = 9 * H + 1800
+    ctx = DataContext(None, "BTC", "1h", now)
+    base = OHLCV([i * H for i in range(10)], [1.0] * 10, [1.0] * 10, [1.0] * 10, [1.0] * 10, [1.0] * 10, ctx)
+    oi = base.open_interest()
+    assert oi[0] == 1.0 and oi[8] == 9.0                           # candle 08:00-09:00 closes with OI at 09:00
+    assert oi[9] == 9.0                                            # forming candle: latest known value (not the future)
+
+
+def test_bybit_open_interest_paging(monkeypatch):
+    import services.open_interest as oi_module
+
+    pages = {None: ([{"openInterest": "5", "timestamp": "7200000"}, {"openInterest": "4", "timestamp": "3600000"}], "next"),
+             "next": ([{"openInterest": "3", "timestamp": "0"}], "")}
+    def fake_get_json(url, params, timeout, exchange):
+        rows, cursor = pages[params.get("cursor")]
+        assert params["category"] == "linear" and params["symbol"] == "BTCUSDT" and params["intervalTime"] == "1h"
+        return {"retCode": 0, "result": {"list": rows, "nextPageCursor": cursor}}
+    monkeypatch.setattr(oi_module, "get_json", fake_get_json)
+    assert oi_module.fetch_bybit("BTC", "USDT", "1h", 0, 7200, 5) == [(0, 3.0), (3600, 4.0), (7200, 5.0)]

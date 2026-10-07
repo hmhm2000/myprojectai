@@ -39,12 +39,14 @@ OKX_PAGE = 100  # history-candles returns at most 100 rows per request
 
 
 def fetch_candles(symbol: str, quote: str, interval: str, start_ms: int, end_ms: int,
-                  max_candles: int, timeout: float) -> list[Candle]:
-    """Candles in [start_ms, end_ms], oldest first. Pages backwards from end_ms (`after` = older than)."""
+                  max_candles: int, timeout: float, market: str = "spot") -> list[Candle]:
+    """Candles in [start_ms, end_ms], oldest first. Pages backwards from end_ms (`after` = older than).
+    market: "spot" or "perp" (USDT perpetual swap; volume in contracts)."""
+    inst_id = f"{symbol}-{quote}-SWAP" if market == "perp" else f"{symbol}-{quote}"
     candles: dict[int, Candle] = {}
     cursor = end_ms + 1
     while len(candles) < max_candles:
-        payload = get_json(CANDLES_URL, {"instId": f"{symbol}-{quote}", "bar": OKX_BARS[interval],
+        payload = get_json(CANDLES_URL, {"instId": inst_id, "bar": OKX_BARS[interval],
                                          "after": str(cursor), "limit": str(OKX_PAGE)}, timeout, "OKX")
         if str(payload.get("code")) != "0":
             raise ProviderError("api_error", f"OKX: API error {payload.get('code')}: {payload.get('msg')}")
