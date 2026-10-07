@@ -1,4 +1,4 @@
-import { CandlestickSeries, createChart, HistogramSeries } from "lightweight-charts";
+import { CandlestickSeries, createChart, createSeriesMarkers, HistogramSeries } from "lightweight-charts";
 import { useEffect, useRef, useState } from "react";
 import { errorMessage } from "../../api/client";
 import { candlesApi } from "../../api/endpoints";
@@ -7,6 +7,11 @@ import { t } from "../../i18n";
 const PAGE = 500;            // candles per request
 const POLL_MS = 30_000;      // refresh of the last candles (the backend caches live candles for 30 s)
 const LOAD_MORE_AT = 20;     // load older history when fewer bars than this remain on the left
+const STEP = { "1m": 60, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400, "1d": 86400 };
+const MARKER_STYLE = {
+  BUY: { position: "belowBar", shape: "arrowUp", color: "#34d399" },
+  SELL: { position: "aboveBar", shape: "arrowDown", color: "#f87171" },
+};
 
 // Lightweight Charts shows times in UTC - shift them so the axis shows local time.
 const toChartTime = (unix) => unix - new Date(unix * 1000).getTimezoneOffset() * 60;
@@ -36,12 +41,32 @@ function priceFormat(price) {
 
 /**
  * Candlestick chart (TradingView Lightweight Charts) with volume, zoom/pan, lazy loading of older
- * history and periodic refresh of the newest candles. `onReady(api)` exposes the chart and series
- * so callers can add markers/indicators.
+ * history and periodic refresh of the newest candles.
+ * - `markers`: [{ id, side: "BUY" | "SELL", time (unix s), text? }] drawn on the candle containing `time`,
+ * - `onMarkerClick(markers)`: called with all markers of the clicked candle,
+ * - `focusTime` (unix s): scrolls the chart to that moment (when it is within the loaded history),
+ * - `onReady(api)`: exposes the chart and series so callers can add indicators.
  */
-export default function CandleChart({ symbol, interval, onReady }) {
+export default function CandleChart({ symbol, interval, markers = [], onMarkerClick, focusTime = null, onReady }) {
   const containerRef = useRef(null);
   const [state, setState] = useState({ loading: true, error: null, source: null });
+  // Latest props for the chart callbacks (the chart itself is rebuilt only for a new symbol/interval).
+  const markersRef = useRef(markers);
+  const clickRef = useRef(onMarkerClick);
+  const readyRef = useRef(onReady);
+  const applyMarkersRef = useRef(() => {});
+  const focusRef = useRef(() => {});
+  clickRef.current = onMarkerClick;
+  readyRef.current = onReady;
+
+  useEffect(() => {
+    markersRef.current = markers;
+    applyMarkersRef.current();
+  }, [markers]);
+
+  useEffect(() => {
+    if (focusTime) focusRef.current(focusTime);
+  }, [focusTime]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -59,6 +84,10 @@ export default function CandleChart({ symbol, interval, onReady }) {
     });
     const volume = chart.addSeries(HistogramSeries, { priceFormat: { type: "volume" }, priceScaleId: "" });
     volume.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+    const seriesMarkers = createSeriesMarkers(candles, []);
+    const step = STEP[interval] ?? 3600;
+    // Marker time -> time of the candle that contains it (chart time).
+    const snap = (unix) => toChartTime(Math.floor(unix / step) * step);
 
     let bars = [];
     let oldestUnix = null;
@@ -66,9 +95,28 @@ export default function CandleChart({ symbol, interval, onReady }) {
     let noMoreHistory = false;
     let disposed = false;
 
+    const applyMarkers = () => {
+      if (!bars.length) return;
+      const first = bars[0].time;
+      const last = bars[bars.length - 1].time;
+      const list = markersRef.current
+        .map((m) => ({ ...MARKER_STYLE[m.side], time: snap(m.time), text: m.text ?? m.side, id: m.id }))
+        .filter((m) => m.time >= first && m.time <= last)
+        .sort((a, b) => a.time - b.time);
+      seriesMarkers.setMarkers(list);
+    };
+    applyMarkersRef.current = applyMarkers;
+
+    focusRef.current = (unix) => {
+      const time = snap(unix);
+      if (!bars.length || time < bars[0].time) return;
+      chart.timeScale().setVisibleRange({ from: time - 60 * step, to: time + 60 * step });
+    };
+
     const setAll = () => {
       candles.setData(bars);
       volume.setData(bars.map(volumeBar));
+      applyMarkers();
     };
 
     const loadOlder = async () => {
@@ -103,6 +151,7 @@ export default function CandleChart({ symbol, interval, onReady }) {
           candles.update(bar);
           volume.update(volumeBar(bar));
         }
+        applyMarkers();
       } catch {
         // keep the chart as is; the next poll will try again
       }
@@ -119,7 +168,7 @@ export default function CandleChart({ symbol, interval, onReady }) {
         setAll();
         chart.timeScale().fitContent();
         setState({ loading: false, error: null, source: data.source });
-        onReady?.({ chart, candles, toChartTime, getBars: () => bars });
+        readyRef.current?.({ chart, candles, toChartTime, getBars: () => bars });
       } catch (err) {
         if (!disposed) setState({ loading: false, error: errorMessage(err), source: null });
       }
@@ -128,6 +177,11 @@ export default function CandleChart({ symbol, interval, onReady }) {
     chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
       if (range && range.from < LOAD_MORE_AT) loadOlder();
     });
+    chart.subscribeClick((param) => {
+      if (!param.time || !clickRef.current) return;
+      const hits = markersRef.current.filter((m) => snap(m.time) === param.time);
+      if (hits.length) clickRef.current(hits);
+    });
     const poll = setInterval(refreshLatest, POLL_MS);
 
     return () => {
@@ -135,7 +189,7 @@ export default function CandleChart({ symbol, interval, onReady }) {
       clearInterval(poll);
       chart.remove();
     };
-  }, [symbol, interval, onReady]);
+  }, [symbol, interval]);
 
   return (
     <div className="relative">

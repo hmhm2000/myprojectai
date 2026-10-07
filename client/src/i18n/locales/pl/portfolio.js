@@ -92,6 +92,7 @@ export default {
     allHidden: "Wszystkie pozycje są zamknięte i ukryte.",
     sell: "Sprzedaj {{symbol}}",
     buy: "Kup {{symbol}}",
+    chart: "Wykres",
     realizedFooter: "Zrealizowany na {{symbol}} (też z zamkniętych):",
   },
 

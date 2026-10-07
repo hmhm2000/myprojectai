@@ -452,3 +452,15 @@ W `locales/pl/index.js` są też format liczb i dat (`pl-PL`) oraz symbol waluty
 - API: `GET /api/candles?symbol=BTC&interval=1h&limit=500&before=<unix>`. Każda świeca ma pole `closed`: `false` oznacza ostatnią, jeszcze trwającą świecę. Przyda się do wskaźników i alertów (potwierdzanie świec).
 - Strona wykresu ładuje się osobno, tylko gdy ją otworzysz, więc reszta aplikacji się nie spowalnia.
 - Testy: `server/tests/test_candles_api.py`.
+
+---
+
+## Etap 14: transakcje z dziennika na wykresie
+
+- Na wykresie są **strzałki BUY** (zielone, pod świecą) i **SELL** (czerwone, nad świecą), w miejscu świecy, w której była transakcja. Pokazują się też po doładowaniu starszej historii.
+- **Kliknięcie strzałki** (albo wiersza na liście pod wykresem) otwiera wpis z dziennika:
+  - **BUY:** cena, ilość, data, portfel, aktualny wynik pozycji, powód wejścia, tagi, TP/SL i plan;
+  - **SELL:** cena, ilość, powód wyjścia i z których zakupów była sprzedaż.
+- Pod wykresem jest **lista Twoich transakcji** na danym coinie. Kliknięcie wiersza przewija wykres do tej transakcji, o ile mieści się w doładowanej historii.
+- W portfelu przy każdym coinie (po rozwinięciu) jest przycisk **Wykres**, który otwiera wykres tego coina.
+- Backend się nie zmienił: transakcje pochodzą z istniejącego API portfeli.
