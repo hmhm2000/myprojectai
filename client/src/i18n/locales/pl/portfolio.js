@@ -7,6 +7,8 @@ export default {
     loadFailed: "Nie udało się wczytać portfela",
     saveOrderFailed: "Nie udało się zapisać kolejności",
     newPortfolio: "Portfel",
+    imported: "Importowane",
+    manual: "Ręczne",
     rename: "Zmień nazwę",
     delete: "Usuń portfel",
     coins: "Coiny",

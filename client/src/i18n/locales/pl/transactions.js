@@ -2,6 +2,7 @@
 export default {
   title: "Szczegóły transakcji",
   empty: "Brak transakcji.",
+  imported: "import",
   missing: "Nieobecne w ostatnim eksporcie",
   filters: {
     symbol: "Wszystkie coiny",
@@ -44,6 +45,7 @@ export default {
     price: "Cena",
     unrealized: "Niezrealizowany",
     hint: "Transfer z konta to przeniesienie na inne konto - bez zysku i straty, z kosztem według metody. Futures nie są wliczane. Cena: bieżąca albo wpisz własną i Enter.",
+    outAverage: "śr. {{price}} za coin",
     uncovered: "sprzedano lub wyprowadzono ponad historię (np. coiny sprzed eksportu) - liczone z kosztem 0.",
   },
   journal: {

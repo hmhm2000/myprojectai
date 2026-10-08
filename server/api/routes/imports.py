@@ -17,6 +17,7 @@ from models.imports import AccountMovement, ImportFile
 from models.portfolio import Portfolio, Position, Sale
 from models.user import User
 from services.cost_basis import METHODS
+from services import manual_cleanup
 from services.imports import importer
 from services.price_service import price_service
 from services.transactions import cost_summaries, list_transactions
@@ -25,14 +26,20 @@ router = APIRouter(tags=["import"])
 _last_sync: dict[int, list[dict]] = {}     # user id -> results of the last sync (shown in the panel)
 
 
-class ImportSettingsIn(BaseModel):
-    portfolio_id: Optional[int] = None
-    cost_method: Optional[Literal["average", "fifo", "lifo"]] = None
+class CostMethodIn(BaseModel):
+    cost_method: Literal["average", "fifo", "lifo"]
 
 
 class MissingActionIn(BaseModel):
     kind: Literal["position", "sale", "movement"]
     id: str
+
+
+class CleanupIn(BaseModel):
+    confirm: bool = False
+    positions: int            # counts from the dry run - nothing else is removed
+    sales: int
+    delete_empty_portfolios: bool = False
 
 
 class DetailsIn(BaseModel):
@@ -80,9 +87,10 @@ def _status(db: Session, user: User) -> dict:
                       "status": "imported" if row else "new", "import": _file_out(row) if row else None})
     history = (db.query(ImportFile).filter(ImportFile.user_id == user.id)
                .order_by(ImportFile.imported_at.desc(), ImportFile.id.desc()).limit(50).all())
-    row = importer.get_settings(db, user)
-    db.commit()
-    return {"folder": str(folder.resolve()), "portfolio_id": row.portfolio_id, "cost_method": row.cost_method,
+    portfolios = (db.query(Portfolio).filter(Portfolio.user_id == user.id, Portfolio.kind == "import")
+                  .order_by(Portfolio.id).all())
+    return {"folder": str(folder.resolve()),
+            "portfolios": [{"id": p.id, "name": p.name, "source": p.source} for p in portfolios],
             "files": files, "history": [_file_out(h) for h in history], "last_sync": _last_sync.get(user.id, []),
             "missing": _missing(db, user)}
 
@@ -96,20 +104,6 @@ def import_status(user: User = Depends(get_current_user), db: Session = Depends(
 def import_sync(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Import every new file from the folder ("Synchronizuj")."""
     _last_sync[user.id] = [r.__dict__ for r in importer.sync_folder(db, user)]
-    return _status(db, user)
-
-
-@router.put("/api/import/settings")
-def import_settings(data: ImportSettingsIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    row = importer.get_settings(db, user)
-    if data.portfolio_id is not None:
-        portfolio = db.get(Portfolio, data.portfolio_id)
-        if portfolio is None or portfolio.user_id != user.id:
-            raise NotFound("portfolio.not_found", "Portfolio not found")
-        row.portfolio_id = portfolio.id
-    if data.cost_method is not None:
-        row.cost_method = data.cost_method
-    db.commit()
     return _status(db, user)
 
 
@@ -161,15 +155,25 @@ def transactions(portfolio_id: int, user: User = Depends(get_current_user), db: 
     return list_transactions(db, _portfolio(db, portfolio_id, user))
 
 
+@router.put("/api/portfolios/{portfolio_id}/cost-method", status_code=204)
+def set_cost_method(portfolio_id: int, data: CostMethodIn,
+                    user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Cost method of the details view - remembered per portfolio."""
+    _portfolio(db, portfolio_id, user).cost_method = data.cost_method
+    db.commit()
+    return Response(status_code=204)
+
+
 @router.get("/api/portfolios/{portfolio_id}/cost-summary")
-def cost_summary(portfolio_id: int, method: str = Query("average"), symbol: Optional[str] = Query(None),
+def cost_summary(portfolio_id: int, method: Optional[str] = Query(None), symbol: Optional[str] = Query(None),
                  price: Optional[Decimal] = Query(None, gt=0),
                  user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Balance, cost, realized (net of fees) and unrealized per coin - average / FIFO / LIFO.
     `price` (with `symbol`) overrides the current price for the unrealized result."""
+    portfolio = _portfolio(db, portfolio_id, user)
+    method = method or portfolio.cost_method          # default: the method remembered for the portfolio
     if method not in METHODS:
         raise BadRequest("import.invalid_method", "Unknown cost method", method=method)
-    portfolio = _portfolio(db, portfolio_id, user)
     snapshot = price_service.get_snapshot()
     prices = {s: q.price for s, q in snapshot.quotes.items()}
     if symbol and price is not None:
@@ -200,3 +204,17 @@ def update_details(kind: Literal["position", "sale", "movement"], entry_id: str,
             entry.custom_fields = json.dumps(fields) if fields else None
     db.commit()
     return Response(status_code=204)
+
+
+# ------------------------------------------------------------------ one-off cleanup of manual entries
+
+@router.get("/api/maintenance/manual-cleanup")
+def manual_cleanup_plan(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Dry run: what would be removed from the manual portfolios (everything except SPX). Changes nothing."""
+    return manual_cleanup.plan(db, user)
+
+
+@router.post("/api/maintenance/manual-cleanup")
+def manual_cleanup_execute(data: CleanupIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Backup to data/backups, then remove manual positions and sales except SPX (after confirmation)."""
+    return manual_cleanup.execute(db, user, data.confirm, data.positions, data.sales, data.delete_empty_portfolios)

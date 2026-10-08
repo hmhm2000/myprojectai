@@ -107,7 +107,9 @@ def _write_sale_group(db: Session, portfolio: Portfolio, data: SaleIn, group_id:
 @router.get("/portfolios", response_model=list[PortfolioListItem])
 def list_portfolios(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     snapshot = price_service.get_snapshot()
-    portfolios = db.query(Portfolio).filter(Portfolio.user_id == user.id).order_by(Portfolio.id).all()
+    # imported portfolios first, then the manual ones
+    portfolios = (db.query(Portfolio).filter(Portfolio.user_id == user.id)
+                  .order_by(Portfolio.kind != "import", Portfolio.id).all())
     return [build_list_item(p, snapshot) for p in portfolios]
 
 

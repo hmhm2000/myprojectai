@@ -100,6 +100,9 @@ def build_portfolio(portfolio: Portfolio, snapshot: Snapshot) -> PortfolioOut:
         id=portfolio.id,
         name=portfolio.name,
         created_at=portfolio.created_at,
+        kind=portfolio.kind,
+        source=portfolio.source,
+        cost_method=portfolio.cost_method,
         summary=summary,
         coins=coins,
         prices=PricesMeta(fetched_at=snapshot.fetched_at, stale=snapshot.stale),
@@ -112,6 +115,8 @@ def build_list_item(portfolio: Portfolio, snapshot: Snapshot) -> PortfolioListIt
         id=portfolio.id,
         name=portfolio.name,
         created_at=portfolio.created_at,
+        kind=portfolio.kind,
+        source=portfolio.source,
         positions_count=len(portfolio.positions),
         summary=summary,
     )

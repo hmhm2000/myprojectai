@@ -72,7 +72,7 @@ def run(path, user):
 
 
 def okx_portfolio(db) -> Portfolio:
-    return db.query(Portfolio).filter(Portfolio.name == "OKX").one()
+    return db.query(Portfolio).filter(Portfolio.kind == "import", Portfolio.source == "okx").one()
 
 
 def test_adapter_pairs_rows_and_converts_time(tmp_path):
@@ -139,6 +139,7 @@ def test_changed_row_updates_keeps_manual_fields_and_logs(tmp_path, client, user
 
 def test_other_sources_are_never_touched(tmp_path, client, user):
     headers = login(client)
+    # a MANUAL portfolio called "OKX" - the import must not use it (no lookup by name)
     portfolio_id = client.post("/api/portfolios", json={"name": "OKX"}, headers=headers).json()["id"]
     client.post(f"/api/portfolios/{portfolio_id}/positions", headers=headers, json={
         "symbol": "BTC", "buy_price": "50000", "quantity": "0.01", "bought_at": "2026-07-01T10:00:00"})
@@ -155,6 +156,13 @@ def test_other_sources_are_never_touched(tmp_path, client, user):
                  db.query(Position).filter(Position.source != "okx")]
         assert after == before                                             # no sale assigned, no flag, no change
         assert db.query(Position).filter(Position.source == "okx").count() == 5
+        imported = okx_portfolio(db)
+        assert imported.id != portfolio_id and imported.name == "OKX"
+        assert {p.portfolio_id for p in db.query(Position).filter(Position.source == "okx")} == {imported.id}
+        manual = db.get(Portfolio, portfolio_id)
+        assert (manual.kind, manual.source, len(manual.positions)) == ("manual", None, 2)
+    listed = client.get("/api/portfolios", headers=headers).json()
+    assert [(p["kind"], p["source"]) for p in listed] == [("import", "okx"), ("manual", None)]   # imported first
 
 
 def test_missing_rows_are_flagged_not_deleted(tmp_path, client, user):
@@ -206,6 +214,10 @@ def test_control_values(tmp_path, client, user):
         return client.get(url + "".join(f"&{k}={v}" for k, v in query.items()), headers=headers).json()[0]
 
     average, fifo, lifo = summary("average"), summary("fifo"), summary("lifo")
+    # average cost per BTC of the 0.00302317 BTC held before the transfer out (moved out at that cost)
+    assert average["transferred_out_average_cost"] == pytest.approx(76728, abs=1)
+    assert fifo["transferred_out_average_cost"] == pytest.approx(83690, abs=1)
+    assert lifo["transferred_out_average_cost"] == pytest.approx(70681, abs=1)
     assert average["balance"] == 0 and average["transferred_out"] == pytest.approx(0.00302317)
     assert average["transferred_out_cost"] == pytest.approx(231.96, abs=0.01)
     assert fifo["transferred_out_cost"] == pytest.approx(253.0, abs=0.01)
@@ -249,3 +261,17 @@ def test_folder_sync_and_status(tmp_path, client, user):
     with SessionLocal() as db:
         assert db.query(Position).filter(Position.source == "okx").count() == 5
     assert status["history"][0]["filename"] == full_name()
+
+
+def test_cost_method_is_remembered_per_portfolio(tmp_path, client, user):
+    run(write(tmp_path, full_name(), range(1, 8)), user)
+    headers = login(client)
+    with SessionLocal() as db:
+        portfolio_id = okx_portfolio(db).id
+    default = client.get(f"/api/portfolios/{portfolio_id}/cost-summary?symbol=BTC", headers=headers).json()[0]
+    assert default["method"] == "average"
+    assert client.put(f"/api/portfolios/{portfolio_id}/cost-method", json={"cost_method": "fifo"},
+                      headers=headers).status_code == 204
+    assert client.get(f"/api/portfolios/{portfolio_id}", headers=headers).json()["cost_method"] == "fifo"
+    remembered = client.get(f"/api/portfolios/{portfolio_id}/cost-summary?symbol=BTC", headers=headers).json()[0]
+    assert remembered["method"] == "fifo" and remembered["average_cost"] == pytest.approx(83690, abs=1)

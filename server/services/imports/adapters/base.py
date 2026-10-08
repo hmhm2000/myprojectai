@@ -54,7 +54,8 @@ class ParsedExport:
 
 
 class ExchangeAdapter(Protocol):
-    source: str
+    source: str                    # "okx" - stored on every entry and on the exchange's import portfolio
+    name: str                      # "OKX" - name of the import portfolio
 
     def detect(self, path: Path, head: str) -> bool:
         """True when the file (its first lines in `head`) is an export of this exchange."""

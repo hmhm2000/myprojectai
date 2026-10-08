@@ -194,6 +194,9 @@ class PortfolioOut(BaseModel):
     id: int
     name: str
     created_at: datetime
+    kind: str = "manual"              # "manual" | "import"
+    source: Optional[str] = None      # exchange of an import portfolio
+    cost_method: str = "average"
     summary: SummaryOut
     coins: list[CoinOut]
     prices: PricesMeta
@@ -203,6 +206,8 @@ class PortfolioListItem(BaseModel):
     id: int
     name: str
     created_at: datetime
+    kind: str = "manual"
+    source: Optional[str] = None
     positions_count: int
     summary: SummaryOut
 

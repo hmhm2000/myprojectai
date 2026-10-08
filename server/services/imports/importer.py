@@ -1,5 +1,7 @@
 """Import of exchange export files into the ordinary portfolio model.
 
+Every exchange has its own import portfolio (kind = "import", source = exchange, e.g. "OKX"), created
+on the first import - manual portfolios are never used or changed by an import.
 A purchase becomes a Position and a sale a sale group - created by the same code as the manual form
 (`_write_sale_group`), with `source` / `external_id` / `raw`. Transfers and futures are stored as
 AccountMovements (details view only). Rules:
@@ -31,7 +33,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from config import settings
-from models.imports import AccountMovement, ImportChange, ImportFile, ImportSettings
+from models.imports import AccountMovement, ImportChange, ImportFile
 from models.portfolio import Portfolio, Position, Sale, utcnow
 from models.user import User
 from services.imports.adapters.base import ImportRecord, ParsedExport
@@ -41,7 +43,6 @@ from services.pnl import held_quantity
 logger = logging.getLogger(__name__)
 
 ADAPTERS = [OkxAdapter()]
-DEFAULT_PORTFOLIO = "OKX"
 BALANCE_TOLERANCE = Decimal("0.00000001")
 SALE_NAMESPACE = uuid.UUID("5b0c6f43-6f1e-4d3b-9a43-2f6f0c3e7a11")
 _lock = threading.Lock()
@@ -97,27 +98,15 @@ def detect_adapter(path: Path):
     return next((a for a in ADAPTERS if a.detect(path, head)), None)
 
 
-def get_settings(db: Session, user: User) -> ImportSettings:
-    row = db.get(ImportSettings, user.id)
-    if row is None:
-        row = ImportSettings(user_id=user.id, cost_method="average")
-        db.add(row)
+def import_portfolio(db: Session, user: User, source: str, name: Optional[str] = None) -> Portfolio:
+    """The exchange's own import portfolio (kind "import", source = exchange) - created when missing.
+    Looked up by kind + source only: a manual portfolio with the same name is never used."""
+    portfolio = (db.query(Portfolio).filter(Portfolio.user_id == user.id, Portfolio.kind == "import",
+                                            Portfolio.source == source).order_by(Portfolio.id).first())
+    if portfolio is None:
+        portfolio = Portfolio(user_id=user.id, name=name or source.upper(), kind="import", source=source)
+        db.add(portfolio)
         db.flush()
-    return row
-
-
-def target_portfolio(db: Session, user: User) -> Portfolio:
-    """Portfolio for imported trades: the one set in the Import panel, by default "OKX" (created once)."""
-    row = get_settings(db, user)
-    portfolio = db.get(Portfolio, row.portfolio_id) if row.portfolio_id else None
-    if portfolio is None or portfolio.user_id != user.id:
-        portfolio = (db.query(Portfolio).filter(Portfolio.user_id == user.id, Portfolio.name == DEFAULT_PORTFOLIO)
-                     .first())
-        if portfolio is None:
-            portfolio = Portfolio(user_id=user.id, name=DEFAULT_PORTFOLIO)
-            db.add(portfolio)
-            db.flush()
-        row.portfolio_id = portfolio.id
     return portfolio
 
 
@@ -136,12 +125,13 @@ class _Index:
     """This user's entries of one source, by external_id."""
 
     def __init__(self, db: Session, user: User, source: str):
+        mine = (Portfolio.user_id == user.id, Portfolio.kind == "import", Portfolio.source == source)
         self.positions = {p.external_id: p for p in (
-            db.query(Position).join(Portfolio).filter(Portfolio.user_id == user.id, Position.source == source,
+            db.query(Position).join(Portfolio).filter(*mine, Position.source == source,
                                                       Position.external_id.isnot(None)))}
         self.sales: dict[str, list[Sale]] = {}
         for sale in (db.query(Sale).join(Position).join(Portfolio)
-                     .filter(Portfolio.user_id == user.id, Sale.source == source, Sale.external_id.isnot(None))):
+                     .filter(*mine, Sale.source == source, Sale.external_id.isnot(None))):
             self.sales.setdefault(sale.external_id, []).append(sale)
         self.movements = {m.external_id: m for m in db.query(AccountMovement).filter(
             AccountMovement.user_id == user.id, AccountMovement.source == source,
@@ -174,7 +164,7 @@ def import_file(db: Session, user: User, path: Path) -> FileResult:
         return FileResult(path.name, "unrecognized")
     try:
         parsed = adapter.parse(path)
-        result = _import_parsed(db, user, path.name, sha, parsed)
+        result = _import_parsed(db, user, path.name, sha, parsed, adapter.name)
         db.commit()
         logger.info("Imported %s: %s new, %s updated, %s skipped, %s unchanged", path.name, result.rows_new,
                     result.rows_updated, result.rows_skipped, result.rows_unchanged)
@@ -187,10 +177,11 @@ def import_file(db: Session, user: User, path: Path) -> FileResult:
 
 # ------------------------------------------------------------------ import of one parsed file
 
-def _import_parsed(db: Session, user: User, filename: str, sha: str, parsed: ParsedExport) -> FileResult:
+def _import_parsed(db: Session, user: User, filename: str, sha: str, parsed: ParsedExport,
+                   exchange_name: Optional[str] = None) -> FileResult:
     source = parsed.source
     now = utcnow()
-    portfolio = target_portfolio(db, user)
+    portfolio = import_portfolio(db, user, source, exchange_name)
     file_row = ImportFile(user_id=user.id, filename=filename, sha256=sha, source=source, imported_at=now,
                           rows_total=parsed.rows_total)
     db.add(file_row)
@@ -332,6 +323,8 @@ def _rebuild_sales(db: Session, user: User, source: str, portfolio_id: int, symb
     from schemas.portfolio import SaleAllocationIn, SaleIn
 
     portfolio = db.get(Portfolio, portfolio_id)
+    if portfolio.kind != "import":            # never touch a manual portfolio
+        return
     rows = (db.query(Sale).join(Position).filter(Position.portfolio_id == portfolio_id, Position.symbol == symbol,
                                                  Sale.source == source).all())
     uncovered = db.query(AccountMovement).filter(
@@ -401,12 +394,13 @@ def _flag_missing(db: Session, user: User, source: str, parsed: ParsedExport, se
     if parsed.period is None:
         return
     start, end = (local_time(t) for t in parsed.period)
+    mine = (Portfolio.user_id == user.id, Portfolio.kind == "import", Portfolio.source == source)
     entries = [
         (p, p.bought_at) for p in db.query(Position).join(Portfolio).filter(
-            Portfolio.user_id == user.id, Position.source == source, Position.external_id.isnot(None))
+            *mine, Position.source == source, Position.external_id.isnot(None))
     ] + [
         (s, s.sold_at) for s in db.query(Sale).join(Position).join(Portfolio).filter(
-            Portfolio.user_id == user.id, Sale.source == source, Sale.external_id.isnot(None))
+            *mine, Sale.source == source, Sale.external_id.isnot(None))
     ] + [
         (m, m.occurred_at) for m in db.query(AccountMovement).filter(
             AccountMovement.user_id == user.id, AccountMovement.source == source,
@@ -424,10 +418,11 @@ def source_balances(db: Session, user: User, source: str) -> dict[str, Decimal]:
     def add(symbol, amount):
         balances[symbol] = balances.get(symbol, Decimal(0)) + amount
 
-    for p in db.query(Position).join(Portfolio).filter(Portfolio.user_id == user.id, Position.source == source):
+    mine = (Portfolio.user_id == user.id, Portfolio.kind == "import", Portfolio.source == source)
+    for p in db.query(Position).join(Portfolio).filter(*mine, Position.source == source):
         add(p.symbol, held_quantity(p))
     seen_groups = set()
-    for s in db.query(Sale).join(Position).join(Portfolio).filter(Portfolio.user_id == user.id, Sale.source == source):
+    for s in db.query(Sale).join(Position).join(Portfolio).filter(*mine, Sale.source == source):
         add(s.position.symbol, -s.quantity)
         if s.group_id not in seen_groups:
             seen_groups.add(s.group_id)
