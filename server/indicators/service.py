@@ -53,6 +53,13 @@ def map_to_chart(source_times: list[int], source_interval, values: Series,
     return out
 
 
+def chart_outputs(indicator) -> frozenset:
+    """Outputs the chart draws: everything except alert-only series, plus what fills are drawn between."""
+    drawn = {o.name for o in indicator.outputs if o.plot != "none"}
+    drawn |= {name for o in indicator.outputs if o.plot == "band" for name in o.between}
+    return frozenset(drawn)
+
+
 def compute_indicator(candle_service, indicator_id: str, raw_params: Optional[dict], symbol: str,
                       interval: str, start: int, end: int, now: float,
                       indicator_interval: Optional[str] = None) -> IndicatorResult:
@@ -74,7 +81,8 @@ def compute_indicator(candle_service, indicator_id: str, raw_params: Optional[di
     max_candles = min(MAX_CANDLES, (end - fetch_start) // source_step + 2)
     series = candle_service.get_candles(symbol, source_interval, fetch_start, end, max_candles=max_candles)
 
-    data = OHLCV.from_candles(series.candles, DataContext(candle_service, symbol, source_interval, now))
+    data = OHLCV.from_candles(series.candles, DataContext(candle_service, symbol, source_interval, now,
+                                                          chart_outputs(indicator)))
     outputs = indicator.compute(data, params)
 
     if source_interval == interval:

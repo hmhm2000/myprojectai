@@ -56,6 +56,11 @@ class OHLCV:
         except AppError:
             return None
 
+    def wants(self, *outputs: str) -> bool:
+        """True when any of these outputs is needed by the caller (always, when not told otherwise)."""
+        wanted = self.context.outputs if self.context is not None else None
+        return wanted is None or any(name in wanted for name in outputs)
+
     def perp(self, symbol: Optional[str] = None) -> Optional["OHLCV"]:
         """Candles of the coin's USDT perpetual (or of `symbol`) aligned with these candles; None if unavailable."""
         if self.context is None or not self.time:

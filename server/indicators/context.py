@@ -10,7 +10,7 @@ from __future__ import annotations
 import bisect
 import math
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 from indicators.core import Series
 from services.intervals import parse
@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from indicators.base import OHLCV
 
 MAX_CANDLES = 6000
+LOWER_TF_CANDLES = 1500   # a LOWER timeframe (e.g. 1h on a 1D chart) is read only for its newest candles
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,8 @@ class DataContext:
     symbol: str
     interval: str                 # interval of the candles this context belongs to
     now: float
+    # outputs the caller needs (None = all) - lets an indicator skip work for outputs nobody uses
+    outputs: Optional[frozenset] = None
     _cache: dict = field(default_factory=dict, compare=False, repr=False)
 
     def security(self, base: "OHLCV", interval: str, warmup: int) -> HigherTimeframe:
@@ -53,6 +56,10 @@ class DataContext:
         if key not in self._cache:
             start = base.time[0] - warmup * spec.seconds
             end = int(self.now)
+            if spec.seconds < parse(self.interval).seconds:
+                # thousands of 1h candles for years of daily candles would take many requests;
+                # older chart candles then simply have no value from that timeframe
+                start = max(start, end - LOWER_TF_CANDLES * spec.seconds)
             count = min(MAX_CANDLES, math.ceil((end - start) / spec.seconds) + 2)
             series = self.candle_service.get_candles(self.symbol, spec.name, start, end, max_candles=count)
             data = OHLCV.from_candles(series.candles)

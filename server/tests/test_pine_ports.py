@@ -273,3 +273,32 @@ def test_bybit_open_interest_paging(monkeypatch):
         return {"retCode": 0, "result": {"list": rows, "nextPageCursor": cursor}}
     monkeypatch.setattr(oi_module, "get_json", fake_get_json)
     assert oi_module.fetch_bybit("BTC", "USDT", "1h", 0, 7200, 5) == [(0, 3.0), (3600, 4.0), (7200, 5.0)]
+
+
+def test_vmc_reads_other_timeframes_only_when_used():
+    from indicators.service import chart_outputs
+
+    hourly = walk(24 * 60)
+    now = hourly.time[-1] + 1800
+    vmc = get_indicator("vmc_cipher_b")
+
+    class Counting(Hourly):
+        requested = []
+
+        def get_candles(self, symbol, interval, *args, **kwargs):
+            self.requested.append(interval)
+            return super().get_candles(symbol, interval, *args, **kwargs)
+
+    def run(params, outputs):
+        service = Counting(hourly)
+        service.requested = []
+        ctx = DataContext(service, "BTC", "1h", now, outputs)
+        base = OHLCV(hourly.time, hourly.open, hourly.high, hourly.low, hourly.close, hourly.volume, ctx)
+        return vmc.compute(base, validate_params(vmc, params)), service.requested
+
+    _, requested = run({}, chart_outputs(vmc))                          # chart, Sommi hidden (default)
+    assert requested == []
+    out, requested = run({"sommi_diamond_show": True}, chart_outputs(vmc))
+    assert sorted(requested) == ["1h", "4h"]
+    _, requested = run({}, None)                                         # alerts: every output, Sommi included
+    assert sorted(requested) == ["12h", "1h", "4h"]

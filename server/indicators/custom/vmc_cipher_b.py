@@ -259,8 +259,16 @@ def compute(d, p):
                                  p["stoch_k_smooth"], p["stoch_d_smooth"], p["stoch_use_log"], p["stoch_avg"])
     tc = schaff(d.source(p["tc_source"]), p["tc_length"], p["tc_fast_length"], p["tc_slow_length"], p["tc_factor"])
 
+    # Other timeframes are read only when something uses them: the drawn flag / wave / diamond
+    # (when switched on) or the Sommi alert conditions - otherwise e.g. a 1D chart would download
+    # years of 1h candles for a hidden diamond.
+    alerts_sommi = d.wants("sommi_bullish", "sommi_bearish")
+    need_flag = alerts_sommi or (p["sommi_flag_show"] and d.wants("sommi_bear_flag", "sommi_bull_flag")) \
+        or (p["sommi_show_vwap"] and d.wants("sommi_vwap"))
+    need_diamond = alerts_sommi or (p["sommi_diamond_show"] and d.wants("sommi_bear_diamond", "sommi_bull_diamond"))
+
     # Sommi flag: WaveTrend "VWAP" of a higher timeframe
-    htf = d.security(p["sommi_vwap_tf"])
+    htf = d.security(p["sommi_vwap_tf"]) if need_flag else None
     if htf is not None and htf.data.time:
         h1, h2 = wavetrend(htf.data.source(p["wt_ma_source"]), p["wt_channel_len"], p["wt_average_len"], p["wt_ma_len"])
         hvwap = htf.map(_sub(h1, h2))
@@ -275,7 +283,7 @@ def compute(d, p):
 
     # Sommi diamond: Heikin-Ashi candle direction on two higher timeframes
     def ha_dir(tf):
-        sec = d.security(tf)
+        sec = d.security(tf) if need_diamond else None
         if sec is None or not sec.data.time:
             return [False] * n
         return [bool(v) for v in sec.map(heikin_ashi_up(sec.data))]
