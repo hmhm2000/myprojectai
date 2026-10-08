@@ -1,4 +1,4 @@
-import { CandlestickSeries, createChart, createSeriesMarkers, HistogramSeries } from "lightweight-charts";
+import { CandlestickSeries, createChart, createSeriesMarkers, CrosshairMode, HistogramSeries } from "lightweight-charts";
 import { useEffect, useRef, useState } from "react";
 import { errorMessage } from "../../api/client";
 import { candlesApi } from "../../api/endpoints";
@@ -56,9 +56,9 @@ function priceFormat(price) {
  * - `focusTime` (unix s): scrolls the chart to that moment (when it is within the loaded history),
  * - `onReady(api)`: exposes the chart and series so callers can add indicators,
  * - `onBarsChange({ first, last })`: unix times of the loaded range after every load/refresh,
- * - `extraPanes`: number of indicator panes below the price (the chart grows ~150 px per pane).
+ * - `minHeight` (px): the chart fills its parent but never gets lower than this (price pane + indicator panes).
  */
-export default function CandleChart({ symbol, interval, markers = [], onMarkerClick, focusTime = null, onReady, onBarsChange, extraPanes = 0 }) {
+export default function CandleChart({ symbol, interval, markers = [], onMarkerClick, focusTime = null, onReady, onBarsChange, minHeight = 320 }) {
   const containerRef = useRef(null);
   const [state, setState] = useState({ loading: true, error: null, source: null });
   // Latest props for the chart callbacks (the chart itself is rebuilt only for a new symbol/interval).
@@ -86,6 +86,8 @@ export default function CandleChart({ symbol, interval, markers = [], onMarkerCl
     const chart = createChart(container, {
       autoSize: true,
       layout: { background: { color: "transparent" }, textColor: "#a1a1aa", attributionLogo: true },
+      // the crosshair and its price label follow the mouse, not the nearest series (e.g. a Keltner band)
+      crosshair: { mode: CrosshairMode.Normal },
       grid: { vertLines: { color: "rgba(255,255,255,0.04)" }, horzLines: { color: "rgba(255,255,255,0.04)" } },
       timeScale: { timeVisible: true, secondsVisible: false, borderColor: "rgba(255,255,255,0.1)" },
       rightPriceScale: { borderColor: "rgba(255,255,255,0.1)" },
@@ -212,7 +214,7 @@ export default function CandleChart({ symbol, interval, markers = [], onMarkerCl
         setAll();
         chart.timeScale().fitContent();
         setState({ loading: false, error: null, source: data.source });
-        readyRef.current?.({ chart, candles, toChartTime, getBars: () => bars, setBarColors });
+        readyRef.current?.({ chart, candles, container, toChartTime, getBars: () => bars, setBarColors });
       } catch (err) {
         if (!disposed) setState({ loading: false, error: errorMessage(err), source: null });
       }
@@ -236,8 +238,8 @@ export default function CandleChart({ symbol, interval, markers = [], onMarkerCl
   }, [symbol, interval]);
 
   return (
-    <div className="relative">
-      <div ref={containerRef} className="min-h-[320px] w-full" style={{ height: `calc(60vh + ${extraPanes * 150}px)` }} />
+    <div className="relative flex h-full flex-col">
+      <div ref={containerRef} className="w-full flex-1" style={{ minHeight }} />
       {state.loading && <div className="absolute inset-0 grid place-items-center text-sm text-zinc-500">{t("common.loading")}</div>}
       {state.error && <div className="absolute inset-0 grid place-items-center text-sm text-loss">{state.error}</div>}
       {state.source && <div className="mt-1 text-right text-[11px] text-zinc-600">{t("chart.source", { source: state.source })}</div>}

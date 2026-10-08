@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef } from "react";
 import { indicatorsApi } from "../../api/endpoints";
-import { createOutputSeries, drawOutputs, removeOutputSeries } from "./indicatorSeries";
+import { PRICE_PANE_MIN, createOutputSeries, drawOutputs, paneHeight, removeOutputSeries } from "./indicatorSeries";
 
 const TAIL_STEPS = 5; // on refresh only the newest candles are recomputed
 
 /**
  * Draws backend-computed indicators on a CandleChart.
  * - `api` comes from CandleChart's onReady (a new chart for every symbol/interval),
- * - `active`: [{ uid, id, params, interval }] (interval = own timeframe or null), `definitions`: GET /api/indicators,
+ * - `active`: [{ uid, id, params, interval, axisValue }] (interval = own timeframe or null), `definitions`: GET /api/indicators,
+ * - overlays are drawn on the price pane; other indicators get their own native pane below it, with a
+ *   fixed height in px (the price pane keeps the rest, see PRICE_PANE_MIN),
  * - returns `onBarsChange` to pass to CandleChart: fetches only what changed (older history or the tail).
  * Fetched values are kept per indicator (uid) for the current chart, so adding, editing, hiding or
  * showing one indicator does not download the others again.
@@ -49,14 +51,17 @@ export function useIndicators(api, active, definitions, symbol, interval) {
     const saved = cache.current.layers;
 
     let pane = 0;
-    const paneSize = [3]; // price pane 3 parts, an indicator pane 1 part (2 for busy ones like VuManChu)
+    const heights = [0];  // px of every indicator pane (index 0 = price pane, sized from what is left)
     layers.current = active
-      .map(({ uid, id, params, interval: ownInterval }) => {
+      .map(({ uid, id, params, interval: ownInterval, axisValue }) => {
         const def = definitions.find((d) => d.id === id);
         if (!def) return null;
         const paneIndex = def.pane === "overlay" ? 0 : ++pane;
-        if (paneIndex) paneSize[paneIndex] = def.outputs.length > 10 ? 2 : 1;
-        const series = createOutputSeries(api.chart, def, params, paneIndex);
+        if (paneIndex) {
+          if (paneIndex >= api.chart.panes().length) api.chart.addPane();   // native v5 pane below the price
+          heights[paneIndex] = paneHeight(def);
+        }
+        const series = createOutputSeries(api.chart, def, params, paneIndex, axisValue);
         const firstSeries = Object.values(series).find((s) => s.series)?.series;
         def.levels.forEach((price) => firstSeries?.createPriceLine({ price, color: "rgba(161,161,170,0.4)", lineStyle: 2, lineWidth: 1, axisLabelVisible: false }));
         const known = saved.get(uid);
@@ -65,8 +70,15 @@ export function useIndicators(api, active, definitions, symbol, interval) {
       })
       .filter(Boolean);
 
-    // CandleChart grows with the number of panes.
-    api.chart.panes().forEach((p, i) => p.setStretchFactor(paneSize[i] ?? 1));
+    // Indicator panes get their px height, the price pane the rest - also after every resize of the chart.
+    const layout = () => {
+      const total = api.container.clientHeight - 30;        // minus the time axis
+      const below = heights.slice(1).reduce((sum, h) => sum + h, 0);
+      api.chart.panes().forEach((p, i) => p.setStretchFactor(i === 0 ? Math.max(PRICE_PANE_MIN, total - below) : heights[i] ?? 150));
+    };
+    layout();
+    const resize = new ResizeObserver(layout);
+    resize.observe(api.container);
     const tailStart = bars[Math.max(0, bars.length - TAIL_STEPS)].unix;
     layers.current.forEach((layer) => {
       if (layer.first === null) {
@@ -80,6 +92,7 @@ export function useIndicators(api, active, definitions, symbol, interval) {
     });
 
     return () => {
+      resize.disconnect();
       for (const layer of layers.current) {
         saved.set(layer.uid, { values: layer.values, first: layer.first, last: layer.last });
         removeOutputSeries(api, layer.series);

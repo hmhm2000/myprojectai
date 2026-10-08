@@ -12,11 +12,11 @@ import { summaryText as summary } from "../../lib/indicatorMeta";
 export default function IndicatorSidebar({ definitions, items, chartInterval, api, onChanged }) {
   const [modal, setModal] = useState(null); // { item } for edit, {} for add
 
-  const save = async ({ indicator_id, params, interval }) => {
+  const save = async ({ indicator_id, params, interval, axis_value }) => {
     if (modal.item) {
-      await api.update(modal.item.id, { params, interval, follow_chart: !interval });
+      await api.update(modal.item.id, { params, interval, follow_chart: !interval, axis_value });
     } else {
-      await api.add({ indicator_id, params, interval });
+      await api.add({ indicator_id, params, interval, axis_value });
     }
     onChanged();
   };

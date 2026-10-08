@@ -6,12 +6,13 @@ import { Field } from "../ui";
 import { defaultParams as defaults } from "../../lib/indicatorMeta";
 import { intervalLabel, intervalOptions } from "../../lib/intervals";
 import { useChartIntervals } from "../../lib/useChartIntervals";
+import { axisValueOf } from "./indicatorSeries";
 import ParamFields from "./ParamFields";
 
 /**
  * Add / edit one chart indicator. The fields come from the indicator definition (backend), so every
  * indicator gets its own settings; plus the timeframe it is computed on ("" = follow the chart).
- * `item` = saved settings (edit) or null (add). onSave({ indicator_id, params, interval }).
+ * `item` = saved settings (edit) or null (add). onSave({ indicator_id, params, interval, axis_value }).
  */
 export default function IndicatorModal({ definitions, item = null, onSave, onReset, onClose }) {
   const editing = Boolean(item);
@@ -20,6 +21,7 @@ export default function IndicatorModal({ definitions, item = null, onSave, onRes
   const [intervals] = useChartIntervals();
   const [params, setParams] = useState(item?.params ?? (def ? defaults(def) : {}));
   const [interval, setInterval] = useState(item?.interval ?? "");
+  const [axisValue, setAxisValue] = useState(item ? axisValueOf(item, def) : def?.pane === "overlay");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -27,6 +29,7 @@ export default function IndicatorModal({ definitions, item = null, onSave, onRes
     setIndicatorId(id);
     const next = definitions.find((d) => d.id === id);
     setParams(next ? defaults(next) : {});
+    setAxisValue(next?.pane === "overlay");
   };
 
   const run = async (fn) => {
@@ -43,7 +46,7 @@ export default function IndicatorModal({ definitions, item = null, onSave, onRes
 
   const submit = (e) => {
     e.preventDefault();
-    run(() => onSave({ indicator_id: indicatorId, params, interval: interval || null }));
+    run(() => onSave({ indicator_id: indicatorId, params, interval: interval || null, axis_value: axisValue }));
   };
 
   return (
@@ -66,6 +69,13 @@ export default function IndicatorModal({ definitions, item = null, onSave, onRes
             {t("chart.indicators.defaultsInForm")}
           </button>
         )}
+        <label className="flex items-start gap-2 text-sm text-zinc-300">
+          <input type="checkbox" className="mt-1" checked={axisValue} onChange={(e) => setAxisValue(e.target.checked)} />
+          <span>
+            {t("chart.indicators.axisValue")}
+            <span className="block text-xs text-zinc-500">{t("chart.indicators.axisValueHint")}</span>
+          </span>
+        </label>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label={t("chart.indicators.interval")} htmlFor="ind-interval" hint={t("chart.indicators.intervalHint")}>
             <select id="ind-interval" className="w-full" value={interval} onChange={(e) => setInterval(e.target.value)}>

@@ -7,17 +7,26 @@ import { BackgroundSeries, BandSeries } from "./bandSeries";
 const FALLBACK = "#a1a1aa";
 const VALUE_LABEL = new Set(["line", "stepline", "area", "histogram"]);
 
+export const PRICE_PANE_MIN = 300;       // px - indicator panes never squeeze the price below this
+
+/** Height (px) of an indicator's own pane below the price; overlays stay on the price pane (0). */
+export const paneHeight = (def) => (def?.pane === "overlay" ? 0 : def?.outputs.length > 10 ? 230 : 150);
+
+/** Value label on the axis: the saved choice, by default on for the price pane and off for own panes. */
+export const axisValueOf = (item, def) => item.axis_value ?? def?.pane === "overlay";
+
 const colorOf = (output, params) => resolveColor(output.color, params, output.opacity) ?? FALLBACK;
 const paletteOf = (output, params) => (output.palette ?? []).map((c) => resolveColor(c, params, output.opacity));
 
-/** Series for every drawn output of an indicator: { [output]: { series, markers? } }. */
-export function createOutputSeries(chart, def, params, paneIndex) {
+/** Series for every drawn output of an indicator: { [output]: { series, markers? } }.
+ * `axisValue` - show the last value of the lines as a label on the price axis. */
+export function createOutputSeries(chart, def, params, paneIndex, axisValue = true) {
   const result = {};
   for (const output of def.outputs) {
     const color = colorOf(output, params);
     const base = {
       color, lineWidth: output.width ?? 1, priceLineVisible: false,
-      lastValueVisible: output.alert !== false && VALUE_LABEL.has(output.plot), crosshairMarkerVisible: false,
+      lastValueVisible: axisValue && output.alert !== false && VALUE_LABEL.has(output.plot), crosshairMarkerVisible: false,
     };
     let series;
     switch (output.plot) {

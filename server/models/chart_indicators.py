@@ -14,5 +14,7 @@ class ChartIndicator(Base):
     params = Column(Text, nullable=False, default="{}")  # JSON, validated against the indicator definition
     interval = Column(String, nullable=True)             # own timeframe, e.g. "1d"; None = follow the chart
     visible = Column(Boolean, nullable=False, default=True)
+    # value label on the price axis; None = default (on for indicators on the price pane, off for own panes)
+    axis_value = Column(Boolean, nullable=True)
     sort_order = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, nullable=False, default=utcnow)

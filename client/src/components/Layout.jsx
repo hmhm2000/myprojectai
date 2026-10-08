@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/contexts";
 import { t } from "../i18n";
 import { BellIcon, BookIcon, ChartIcon, ImportIcon, ListIcon, LogoutIcon, SettingsIcon, StarIcon, WalletIcon } from "./icons";
@@ -31,6 +31,7 @@ function Logo() {
 export default function Layout() {
   const { user, logout } = useAuth();
   const unseenAlerts = useAlertWatcher(Boolean(user));
+  const wide = useLocation().pathname.startsWith("/chart");
   const badge = (link) => link.badge && unseenAlerts > 0 && (
     <span className="rounded-full bg-neon-green px-1.5 text-[10px] font-bold leading-4 text-ink-950">{unseenAlerts}</span>
   );
@@ -69,7 +70,8 @@ export default function Layout() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-6 animate-fade-in">
+      {/* The chart page uses the whole width of the window. */}
+      <main className={`animate-fade-in ${wide ? "px-3 py-3" : "mx-auto max-w-6xl px-4 py-6"}`}>
         <Outlet />
       </main>
 

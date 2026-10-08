@@ -14,6 +14,11 @@ export default {
     showOnChart: "Pokaż na wykresie",
     hideOnChart: "Ukryj na wykresie",
   },
+  // Układ strony wykresu na szerokim ekranie (zapamiętywany w przeglądarce).
+  layout: {
+    chartLeft: "Wykres po lewej",
+    chartRight: "Wykres po prawej",
+  },
   // Wskaźniki na wykresie (liczone na serwerze).
   indicators: {
     title: "Wskaźniki",
@@ -32,6 +37,8 @@ export default {
     show: "Pokaż",
     remove: "Usuń",
     reset: "Przywróć domyślne",
+    axisValue: "Pokaż wartość na osi",
+    axisValueHint: "Etykieta z aktualną wartością na osi ceny. Domyślnie włączona dla wskaźników na wykresie ceny, wyłączona dla tych w osobnym panelu.",
     defaultsInForm: "Wstaw ustawienia domyślne do formularza",
     opacity: "Krycie (%)",
   },

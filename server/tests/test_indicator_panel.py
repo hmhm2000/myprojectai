@@ -61,8 +61,13 @@ def test_chart_indicator_settings_per_user(client, monkeypatch):
     assert updated["params"]["length"] == 21 and updated["interval"] == "4h" and updated["visible"] is False
     follow = client.put(f"/api/chart-indicators/{rsi['id']}", json={"follow_chart": True}, headers=headers).json()
     assert follow["interval"] is None
+    assert rsi["axis_value"] is None                                       # default for the indicator
+    shown = client.put(f"/api/chart-indicators/{rsi['id']}", json={"axis_value": True}, headers=headers).json()
+    assert shown["axis_value"] is True and shown["params"]["length"] == 21  # other settings kept
 
+    client.put(f"/api/chart-indicators/{created['id']}", json={"axis_value": False}, headers=headers)
     reset = client.post(f"/api/chart-indicators/{created['id']}/reset", headers=headers).json()
+    assert reset["axis_value"] is None
     assert reset["params"] == {"length": 20, "source": "close"} and reset["interval"] is None
 
     bad = client.post("/api/chart-indicators", json={"indicator_id": "sma", "params": {"length": 0}}, headers=headers)

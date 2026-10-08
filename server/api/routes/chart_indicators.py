@@ -23,6 +23,7 @@ class ChartIndicatorIn(BaseModel):
     params: dict = Field(default_factory=dict)
     interval: Optional[str] = None       # own timeframe; None = follow the chart interval
     visible: bool = True
+    axis_value: Optional[bool] = None    # value label on the price axis; None = default for the indicator
 
 
 class ChartIndicatorUpdate(BaseModel):
@@ -30,6 +31,7 @@ class ChartIndicatorUpdate(BaseModel):
     interval: Optional[str] = None
     follow_chart: bool = False           # True -> clear the own interval
     visible: Optional[bool] = None
+    axis_value: Optional[bool] = None
 
 
 class ChartIndicatorOut(BaseModel):
@@ -40,12 +42,14 @@ class ChartIndicatorOut(BaseModel):
     params: dict
     interval: Optional[str]
     visible: bool
+    axis_value: Optional[bool] = None
     sort_order: int
 
 
 def _out(item: ChartIndicator) -> ChartIndicatorOut:
     return ChartIndicatorOut(id=item.id, indicator_id=item.indicator_id, params=json.loads(item.params),
-                             interval=item.interval, visible=item.visible, sort_order=item.sort_order)
+                             interval=item.interval, visible=item.visible, axis_value=item.axis_value,
+                             sort_order=item.sort_order)
 
 
 def _check_interval(value: Optional[str]) -> Optional[str]:
@@ -73,7 +77,7 @@ def add_chart_indicator(data: ChartIndicatorIn, user: User = Depends(get_current
     interval = _check_interval(data.interval)
     last = db.query(func.max(ChartIndicator.sort_order)).filter(ChartIndicator.user_id == user.id).scalar() or 0
     item = ChartIndicator(user_id=user.id, indicator_id=data.indicator_id, params=json.dumps(params),
-                          interval=interval, visible=data.visible, sort_order=last + 1)
+                          interval=interval, visible=data.visible, axis_value=data.axis_value, sort_order=last + 1)
     db.add(item)
     db.commit()
     db.refresh(item)
@@ -92,6 +96,8 @@ def update_chart_indicator(item_id: int, data: ChartIndicatorUpdate,
         item.interval = _check_interval(data.interval)
     if data.visible is not None:
         item.visible = data.visible
+    if data.axis_value is not None:
+        item.axis_value = data.axis_value
     db.commit()
     db.refresh(item)
     return _out(item)
@@ -103,6 +109,7 @@ def reset_chart_indicator(item_id: int, user: User = Depends(get_current_user), 
     item = _get(db, item_id, user)
     item.params = json.dumps(validate_params(get_indicator(item.indicator_id), {}))
     item.interval = None
+    item.axis_value = None
     db.commit()
     db.refresh(item)
     return _out(item)
