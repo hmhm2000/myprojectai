@@ -62,7 +62,7 @@ export default function PortfoliosPage() {
 
   useEffect(() => {
     loadList();
-    // e.g. after "Synchronizuj" or the cleanup - refresh the list without reloading the page
+    // e.g. after "Synchronizuj" - refresh the list without reloading the page
     window.addEventListener("portfolios:changed", loadList);
     return () => window.removeEventListener("portfolios:changed", loadList);
   }, [loadList]);

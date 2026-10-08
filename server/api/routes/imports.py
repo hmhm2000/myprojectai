@@ -17,7 +17,6 @@ from models.imports import AccountMovement, ImportFile
 from models.portfolio import Portfolio, Position, Sale
 from models.user import User
 from services.cost_basis import METHODS
-from services import manual_cleanup
 from services.imports import importer
 from services.price_service import price_service
 from services.transactions import cost_summaries, list_transactions
@@ -33,13 +32,6 @@ class CostMethodIn(BaseModel):
 class MissingActionIn(BaseModel):
     kind: Literal["position", "sale", "movement"]
     id: str
-
-
-class CleanupIn(BaseModel):
-    confirm: bool = False
-    positions: int            # counts from the dry run - nothing else is removed
-    sales: int
-    delete_empty_portfolios: bool = False
 
 
 class DetailsIn(BaseModel):
@@ -205,16 +197,3 @@ def update_details(kind: Literal["position", "sale", "movement"], entry_id: str,
     db.commit()
     return Response(status_code=204)
 
-
-# ------------------------------------------------------------------ one-off cleanup of manual entries
-
-@router.get("/api/maintenance/manual-cleanup")
-def manual_cleanup_plan(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Dry run: what would be removed from the manual portfolios (everything except SPX). Changes nothing."""
-    return manual_cleanup.plan(db, user)
-
-
-@router.post("/api/maintenance/manual-cleanup")
-def manual_cleanup_execute(data: CleanupIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Backup to data/backups, then remove manual positions and sales except SPX (after confirmation)."""
-    return manual_cleanup.execute(db, user, data.confirm, data.positions, data.sales, data.delete_empty_portfolios)

@@ -26,10 +26,6 @@ export default {
       symbol_locked: "Nie można zmienić coina pozycji, która ma sprzedaże",
       quantity_below_sold: "Ilość po opłacie nie może być mniejsza niż już sprzedana ({{sold}} {{symbol}})",
     },
-    cleanup: {
-      not_confirmed: "Czyszczenie wymaga potwierdzenia",
-      plan_changed: "Dane zmieniły się od sprawdzenia ({{positions}} pozycji, {{sales}} sprzedaży) - sprawdź jeszcze raz",
-    },
     import: {
       entry_not_found: "Wpis nie istnieje",
       entry_not_flagged: "Ten wpis nie jest oznaczony jako nieobecny w eksporcie",
