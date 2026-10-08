@@ -4,6 +4,8 @@ export default {
   journal: "Dziennik",
   chart: "Wykres",
   alerts: "Alerty",
+  transactions: "Transakcje",
+  import: "Import",
   favorites: "Ulubione",
   settings: "Ustawienia",
   logout: "Wyloguj",

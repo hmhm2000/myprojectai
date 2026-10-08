@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../context/contexts";
 import { t } from "../i18n";
-import { BellIcon, BookIcon, ChartIcon, LogoutIcon, SettingsIcon, StarIcon, WalletIcon } from "./icons";
+import { BellIcon, BookIcon, ChartIcon, ImportIcon, ListIcon, LogoutIcon, SettingsIcon, StarIcon, WalletIcon } from "./icons";
 import { useAlertWatcher } from "./useAlertWatcher";
 
 const LINKS = [
@@ -9,6 +9,8 @@ const LINKS = [
   { to: "/journal", labelKey: "nav.journal", Icon: BookIcon },
   { to: "/chart", labelKey: "nav.chart", Icon: ChartIcon },
   { to: "/alerts", labelKey: "nav.alerts", Icon: BellIcon, badge: true },
+  { to: "/transactions", labelKey: "nav.transactions", Icon: ListIcon },
+  { to: "/import", labelKey: "nav.import", Icon: ImportIcon },
   { to: "/favorites", labelKey: "nav.favorites", Icon: StarIcon },
   { to: "/settings", labelKey: "nav.settings", Icon: SettingsIcon },
 ];
@@ -79,7 +81,7 @@ export default function Layout() {
               key={link.to}
               to={link.to}
               className={({ isActive }) =>
-                `flex flex-col items-center gap-1 py-2.5 text-[11px] transition ${
+                `flex min-w-0 flex-col items-center gap-1 px-0.5 py-2.5 text-[10px] transition ${
                   isActive ? "text-neon-green" : "text-zinc-500"
                 }`
               }
@@ -88,7 +90,7 @@ export default function Layout() {
                 <link.Icon size={20} />
                 <span className="absolute -right-3 -top-1">{badge(link)}</span>
               </span>
-              {t(link.labelKey)}
+              <span className="w-full truncate text-center">{t(link.labelKey)}</span>
             </NavLink>
           ))}
         </div>
