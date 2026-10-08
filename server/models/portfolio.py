@@ -47,6 +47,16 @@ class Position(Base):
     sort_order = Column(Integer, nullable=False, default=0)  # order set by drag & drop
     show_on_chart = Column(Boolean, nullable=False, default=True)  # presentation only - never used in calculations
     created_at = Column(DateTime, nullable=False, default=utcnow)
+    # Origin: "manual" (the form) or an exchange import ("okx"); the same model and fields for both.
+    source = Column(String, nullable=False, default="manual", server_default="manual")
+    external_id = Column(String, nullable=True, index=True)   # e.g. OKX "id" of the trade row
+    fingerprint = Column(String, nullable=True, index=True)   # duplicate guard (time, order, action, amount, price)
+    raw = Column(Text, nullable=True)                          # JSON: the original export rows (details view only)
+    import_file_id = Column(Integer, ForeignKey("import_files.id", ondelete="SET NULL"), nullable=True)
+    imported_at = Column(DateTime, nullable=True)
+    missing_in_export = Column(Boolean, nullable=False, default=False, server_default="0")
+    note = Column(Text, nullable=True)                         # details view: free notes
+    custom_fields = Column(Text, nullable=True)                # details view: JSON {name: value}
 
     portfolio = relationship("Portfolio", back_populates="positions")
     sales = relationship(
@@ -75,5 +85,15 @@ class Sale(Base):
     exit_reason = Column(Text, nullable=True)  # trade journal: why I sold
     show_on_chart = Column(Boolean, nullable=False, default=True)  # presentation only
     created_at = Column(DateTime, nullable=False, default=utcnow)
+    # Origin: "manual" (the form) or an exchange import ("okx"); same on every row of a sale group.
+    source = Column(String, nullable=False, default="manual", server_default="manual")
+    external_id = Column(String, nullable=True, index=True)   # e.g. OKX "id" of the trade row
+    fingerprint = Column(String, nullable=True, index=True)   # duplicate guard (time, order, action, amount, price)
+    raw = Column(Text, nullable=True)                          # JSON: the original export rows (details view only)
+    import_file_id = Column(Integer, ForeignKey("import_files.id", ondelete="SET NULL"), nullable=True)
+    imported_at = Column(DateTime, nullable=True)
+    missing_in_export = Column(Boolean, nullable=False, default=False, server_default="0")
+    note = Column(Text, nullable=True)                         # details view: free notes
+    custom_fields = Column(Text, nullable=True)                # details view: JSON {name: value}
 
     position = relationship("Position", back_populates="sales")
