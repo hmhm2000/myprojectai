@@ -4,6 +4,7 @@ import CoinPicker from "../components/CoinPicker";
 import CandleChart from "../components/chart/CandleChart";
 import IndicatorSidebar from "../components/chart/IndicatorSidebar";
 import IntervalPicker from "../components/chart/IntervalPicker";
+import Watchlist from "../components/chart/Watchlist";
 import { useIndicators } from "../components/chart/useIndicators";
 import { PRICE_PANE_MIN, axisValueOf, paneHeight } from "../components/chart/indicatorSeries";
 import { chartIndicatorsApi, indicatorsApi } from "../api/endpoints";
@@ -177,15 +178,17 @@ export default function ChartPage() {
   return (
     // Wide screens: chart + side column next to each other, both exactly as high as the window, each
     // scrolling on its own - the chart stays in view. Phones: one column, chart on top (not sticky).
-    <div className="grid gap-3 lg:sticky lg:top-[69px] lg:h-[calc(100vh-81px)] lg:grid-cols-[minmax(0,1fr)_22rem]">
-      <section className={`flex min-w-0 flex-col gap-2 lg:h-full lg:overflow-y-auto ${right ? "lg:order-2" : ""}`}>
+    <div className={`grid gap-3 lg:sticky lg:top-[69px] lg:h-[calc(100vh-81px)] ${
+      right ? "lg:grid-cols-[22rem_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,1fr)_22rem]"}`}>
+      {/* the chart column never scrolls: the chart (with all its panes) always fits the window */}
+      <section className={`flex min-w-0 flex-col gap-2 lg:h-full lg:min-h-0 lg:overflow-hidden ${right ? "lg:order-2" : ""}`}>
         <div className="flex flex-wrap items-center gap-3">
           <div className="w-56">
             <CoinPicker key={symbol} value={symbol} onChange={(s) => s && update({ symbol: s })} />
           </div>
           <IntervalPicker value={interval} onChange={(value) => update({ interval: value })} />
         </div>
-        <div className="tile min-h-0 p-2 lg:flex-1" style={{ minHeight: chartMinHeight + 40 }}>
+        <div className="tile min-h-0 p-2 lg:flex-1">
           <CandleChart
             symbol={symbol}
             interval={interval}
@@ -209,6 +212,10 @@ export default function ChartPage() {
             onClick={() => setChartSide(right ? "left" : "right")}>
             {right ? t("chart.layout.chartLeft") : t("chart.layout.chartRight")}
           </button>
+        </div>
+
+        <div className="tile p-3">
+          <Watchlist symbol={symbol} onSelect={(s) => update({ symbol: s })} />
         </div>
 
         <div className="tile p-3">

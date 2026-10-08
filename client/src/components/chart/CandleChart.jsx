@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { errorMessage } from "../../api/client";
 import { candlesApi } from "../../api/endpoints";
 import { t } from "../../i18n";
+import { fmtDate, fmtDateTime, fmtPct, fmtUnitPrice, pnlTone } from "../../lib/format";
 
 const PAGE = 500;            // candles per request
 const POLL_MS = 30_000;      // refresh of the last candles (the backend caches live candles for 30 s)
@@ -41,6 +42,36 @@ const volumeBar = (bar) => ({
   color: bar.close >= bar.open ? "rgba(52, 211, 153, 0.35)" : "rgba(248, 113, 113, 0.35)",
 });
 
+/** Candle period for the legend: "09.10.2026, 14:00" or "05.10.2026 – 11.10.2026" (multi-day candles). */
+function candlePeriod(bar, next, interval) {
+  const unit = interval.slice(-1);
+  if (unit === "m" || unit === "h") return fmtDateTime(bar.unix * 1000);
+  const n = Number(interval.slice(0, -1)) || 1;
+  if (unit === "d" && n === 1) return fmtDate(bar.unix * 1000);
+  const days = { d: n, w: 7 * n, M: 30.44 * n }[unit] ?? 1;
+  // last day of the candle (midday of the day before the next candle - safe for every time zone)
+  const end = (next ? next.unix : bar.unix + days * 86400) - 12 * 3600;
+  return `${fmtDate(bar.unix * 1000)} – ${fmtDate(end * 1000)}`;
+}
+
+/** Date and OHLC of the candle under the mouse (the newest one otherwise) - top left of the chart. */
+function Legend({ legend, interval }) {
+  if (!legend) return null;
+  const { bar, next } = legend;
+  const change = bar.open ? ((bar.close - bar.open) / bar.open) * 100 : null;
+  return (
+    <div className="pointer-events-none absolute left-2 top-1 z-10 flex flex-wrap items-baseline gap-x-3 rounded bg-ink-950/60 px-1.5 py-0.5 text-[11px]">
+      <span className="font-medium text-zinc-200">{candlePeriod(bar, next, interval)}</span>
+      {["open", "high", "low", "close"].map((k) => (
+        <span key={k} className="num text-zinc-500">
+          {t(`chart.legend.${k}`)} <span className="text-zinc-200">{fmtUnitPrice(bar[k])}</span>
+        </span>
+      ))}
+      {change !== null && <span className={`num ${pnlTone(change)}`}>{fmtPct(change)}</span>}
+    </div>
+  );
+}
+
 /** Price precision suited to the coin (BTC vs memecoins). */
 function priceFormat(price) {
   const decimals = price >= 1000 ? 2 : price >= 1 ? 4 : price >= 0.01 ? 6 : 8;
@@ -56,11 +87,13 @@ function priceFormat(price) {
  * - `focusTime` (unix s): scrolls the chart to that moment (when it is within the loaded history),
  * - `onReady(api)`: exposes the chart and series so callers can add indicators,
  * - `onBarsChange({ first, last })`: unix times of the loaded range after every load/refresh,
- * - `minHeight` (px): the chart fills its parent but never gets lower than this (price pane + indicator panes).
+ * - `minHeight` (px): on phones the chart is at least this high (price pane + indicator panes); on wide
+ *   screens it fills its parent exactly (the panes share the height, see useIndicators).
  */
 export default function CandleChart({ symbol, interval, markers = [], onMarkerClick, focusTime = null, onReady, onBarsChange, minHeight = 320 }) {
   const containerRef = useRef(null);
   const [state, setState] = useState({ loading: true, error: null, source: null });
+  const [legend, setLegend] = useState(null);     // { bar, next } shown in the top-left corner
   // Latest props for the chart callbacks (the chart itself is rebuilt only for a new symbol/interval).
   const markersRef = useRef(markers);
   const clickRef = useRef(onMarkerClick);
@@ -213,6 +246,7 @@ export default function CandleChart({ symbol, interval, markers = [], onMarkerCl
         if (bars.length) candles.applyOptions({ priceFormat: priceFormat(bars[bars.length - 1].close) });
         setAll();
         chart.timeScale().fitContent();
+        if (bars.length) setLegend({ bar: bars[bars.length - 1], next: null });
         setState({ loading: false, error: null, source: data.source });
         readyRef.current?.({ chart, candles, container, toChartTime, getBars: () => bars, setBarColors });
       } catch (err) {
@@ -223,6 +257,14 @@ export default function CandleChart({ symbol, interval, markers = [], onMarkerCl
     chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
       if (range && range.from < LOAD_MORE_AT) loadOlder();
     });
+    // legend: the candle under the mouse, the newest one when the mouse is elsewhere
+    chart.subscribeCrosshairMove((param) => {
+      if (!bars.length) return;
+      const i = param.time ? bars.findIndex((b) => b.time === param.time) : -1;
+      const index = i >= 0 ? i : bars.length - 1;
+      setLegend({ bar: bars[index], next: bars[index + 1] ?? null });
+    });
+
     chart.subscribeClick((param) => {
       if (!param.time || !clickRef.current) return;
       const hits = markersRef.current.filter((m) => snap(m.time) === param.time);
@@ -239,7 +281,9 @@ export default function CandleChart({ symbol, interval, markers = [], onMarkerCl
 
   return (
     <div className="relative flex h-full flex-col">
-      <div ref={containerRef} className="w-full flex-1" style={{ minHeight }} />
+      <Legend legend={legend} interval={interval} />
+      {/* phones: at least the price + indicator panes; wide screens: exactly the space it gets */}
+      <div ref={containerRef} className="w-full flex-1 min-h-[var(--chart-min)] lg:min-h-0" style={{ "--chart-min": `${minHeight}px` }} />
       {state.loading && <div className="absolute inset-0 grid place-items-center text-sm text-zinc-500">{t("common.loading")}</div>}
       {state.error && <div className="absolute inset-0 grid place-items-center text-sm text-loss">{state.error}</div>}
       {state.source && <div className="mt-1 text-right text-[11px] text-zinc-600">{t("chart.source", { source: state.source })}</div>}

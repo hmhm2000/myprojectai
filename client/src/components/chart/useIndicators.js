@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { indicatorsApi } from "../../api/endpoints";
-import { PRICE_PANE_MIN, createOutputSeries, drawOutputs, paneHeight, removeOutputSeries } from "./indicatorSeries";
+import { PRICE_PANE_SHARE, createOutputSeries, drawOutputs, paneHeight, removeOutputSeries } from "./indicatorSeries";
 
 const TAIL_STEPS = 5; // on refresh only the newest candles are recomputed
 
@@ -8,8 +8,9 @@ const TAIL_STEPS = 5; // on refresh only the newest candles are recomputed
  * Draws backend-computed indicators on a CandleChart.
  * - `api` comes from CandleChart's onReady (a new chart for every symbol/interval),
  * - `active`: [{ uid, id, params, interval, axisValue }] (interval = own timeframe or null), `definitions`: GET /api/indicators,
- * - overlays are drawn on the price pane; other indicators get their own native pane below it, with a
- *   fixed height in px (the price pane keeps the rest, see PRICE_PANE_MIN),
+ * - overlays are drawn on the price pane; other indicators get their own native pane below it with
+ *   their preferred height; when they do not fit, they shrink together and the price pane keeps at
+ *   least half of the chart (the whole chart stays in view; pane borders can be dragged),
  * - returns `onBarsChange` to pass to CandleChart: fetches only what changed (older history or the tail).
  * Fetched values are kept per indicator (uid) for the current chart, so adding, editing, hiding or
  * showing one indicator does not download the others again.
@@ -70,11 +71,13 @@ export function useIndicators(api, active, definitions, symbol, interval) {
       })
       .filter(Boolean);
 
-    // Indicator panes get their px height, the price pane the rest - also after every resize of the chart.
+    // Pane sizes - also after every resize of the chart.
     const layout = () => {
-      const total = api.container.clientHeight - 30;        // minus the time axis
-      const below = heights.slice(1).reduce((sum, h) => sum + h, 0);
-      api.chart.panes().forEach((p, i) => p.setStretchFactor(i === 0 ? Math.max(PRICE_PANE_MIN, total - below) : heights[i] ?? 150));
+      const total = Math.max(api.container.clientHeight - 30, 100);   // minus the time axis
+      const wanted = heights.slice(1).reduce((sum, h) => sum + h, 0);
+      const price = Math.max(total - wanted, total * PRICE_PANE_SHARE);
+      const scale = wanted > 0 ? Math.min(1, (total - price) / wanted) : 1;
+      api.chart.panes().forEach((p, i) => p.setStretchFactor(i === 0 ? price : (heights[i] ?? 150) * scale));
     };
     layout();
     const resize = new ResizeObserver(layout);

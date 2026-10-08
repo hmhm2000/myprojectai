@@ -14,6 +14,23 @@ export default {
     showOnChart: "Pokaż na wykresie",
     hideOnChart: "Ukryj na wykresie",
   },
+  // Legenda w lewym górnym rogu wykresu: okres świecy i jej ceny.
+  legend: {
+    open: "O",
+    high: "H",
+    low: "L",
+    close: "C",
+  },
+  // Lista coinów obok wykresu - to listy z „Ulubionych”.
+  watchlist: {
+    title: "Lista coinów",
+    newList: "Lista",
+    listName: "Nazwa listy",
+    noLists: "Nie masz jeszcze list. Utwórz listę - to te same listy co w „Ulubionych”.",
+    empty: "Lista jest pusta. Dodaj {{symbol}} przyciskiem obok albo coiny w „Ulubionych”.",
+    alreadyIn: "{{symbol}} jest już na tej liście",
+    remove: "Usuń {{symbol}} z listy",
+  },
   // Układ strony wykresu na szerokim ekranie (zapamiętywany w przeglądarce).
   layout: {
     chartLeft: "Wykres po lewej",

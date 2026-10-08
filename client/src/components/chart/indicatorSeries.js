@@ -7,7 +7,8 @@ import { BackgroundSeries, BandSeries } from "./bandSeries";
 const FALLBACK = "#a1a1aa";
 const VALUE_LABEL = new Set(["line", "stepline", "area", "histogram"]);
 
-export const PRICE_PANE_MIN = 300;       // px - indicator panes never squeeze the price below this
+export const PRICE_PANE_MIN = 300;       // px - price pane on phones (where the chart grows with the panes)
+export const PRICE_PANE_SHARE = 0.5;     // the price pane keeps at least half of a chart that fits the window
 
 /** Height (px) of an indicator's own pane below the price; overlays stay on the price pane (0). */
 export const paneHeight = (def) => (def?.pane === "overlay" ? 0 : def?.outputs.length > 10 ? 230 : 150);
