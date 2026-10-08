@@ -26,6 +26,11 @@ export default {
       symbol_locked: "Nie można zmienić coina pozycji, która ma sprzedaże",
       quantity_below_sold: "Ilość po opłacie nie może być mniejsza niż już sprzedana ({{sold}} {{symbol}})",
     },
+    import: {
+      entry_not_found: "Wpis nie istnieje",
+      entry_not_flagged: "Ten wpis nie jest oznaczony jako nieobecny w eksporcie",
+      invalid_method: "Nieznana metoda kosztu: {{method}}",
+    },
     sale: {
       not_found: "Sprzedaż nie istnieje",
       position_not_in_portfolio: "Pozycja nie należy do tego portfela",

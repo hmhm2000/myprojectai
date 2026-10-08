@@ -1,17 +1,20 @@
 import logging
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 import models  # noqa: F401  (registers all models)
-from api.routes import alerts, candles, chart_indicators, chart_intervals, favorites, indicators, journal, portfolios, prices, users
+from api.routes import (alerts, candles, chart_indicators, chart_intervals, favorites, imports, indicators, journal,
+                        portfolios, prices, users)
 from auth import ensure_admin_account, router as auth_router
 from config import settings
 from core.errors import AppError, app_error_handler
 from database.db import SessionLocal, engine
 from services.alerts import AlertScheduler
 from services.candle_service import candle_service
+from services.imports.importer import startup_import
 from services.price_service import price_service
 
 logging.basicConfig(
@@ -29,6 +32,8 @@ async def lifespan(app: FastAPI):
     price_service.warm_up_in_background()
     alert_scheduler = AlertScheduler(SessionLocal, candle_service, settings.alert_check_seconds)
     alert_scheduler.start()
+    if settings.import_on_startup:
+        threading.Thread(target=startup_import, name="startup-import", daemon=True).start()
     yield
     alert_scheduler.stop()
 
@@ -55,6 +60,7 @@ app.include_router(indicators.router)
 app.include_router(chart_indicators.router)
 app.include_router(chart_intervals.router)
 app.include_router(alerts.router)
+app.include_router(imports.router)
 
 
 @app.get("/api/health", tags=["health"])

@@ -65,3 +65,8 @@ pineScripts/
 
 #ignore csv folder
 csv/
+
+# Exchange exports and import folder (personal trade history - never commit)
+data/
+*.csv
+*.db
