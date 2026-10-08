@@ -1,4 +1,4 @@
-"""Import of exchange exports (CSV) - files, change history, account movements and settings.
+"""Import of exchange exports (CSV) - files, change history and account movements.
 
 Trades from an import are stored as ordinary positions / sales (models.portfolio) with
 `source` + `external_id`; this module holds what the manual model has no place for.
@@ -71,12 +71,3 @@ class AccountMovement(Base):
     note = Column(Text, nullable=True)
     custom_fields = Column(Text, nullable=True)
     created_at = Column(DateTime, nullable=False, default=utcnow)
-
-
-class ImportSettings(Base):
-    """Per user: which portfolio imported trades go to and the cost method of the details view."""
-
-    __tablename__ = "import_settings"
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
-    portfolio_id = Column(Integer, ForeignKey("portfolios.id", ondelete="SET NULL"), nullable=True)
-    cost_method = Column(String, nullable=False, default="average")   # average | fifo | lifo

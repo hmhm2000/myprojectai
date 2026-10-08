@@ -52,6 +52,7 @@ def _fingerprint(row: dict) -> str:
 
 class OkxAdapter:
     source = "okx"
+    name = "OKX"
 
     def detect(self, path: Path, head: str) -> bool:
         lines = head.lstrip("﻿").splitlines()

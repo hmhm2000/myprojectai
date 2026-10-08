@@ -57,6 +57,8 @@ class Settings:
     import_dir: Path
     import_on_startup: bool
     import_username: str
+    # Backups written before destructive operations (e.g. the manual cleanup).
+    backup_dir: Path
 
 
 def _load() -> Settings:
@@ -87,6 +89,7 @@ def _load() -> Settings:
         import_dir=Path(os.getenv("IMPORT_DIR") or BASE_DIR.parent / "data" / "imports" / "okx"),
         import_on_startup=_bool("IMPORT_ON_STARTUP", True),
         import_username=(os.getenv("IMPORT_USERNAME") or os.getenv("ADMIN_USERNAME") or "admin").strip(),
+        backup_dir=Path(os.getenv("BACKUP_DIR") or BASE_DIR.parent / "data" / "backups"),
     )
 
 

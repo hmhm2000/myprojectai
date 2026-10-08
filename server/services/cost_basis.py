@@ -41,6 +41,7 @@ class CostSummary:
     fees: Decimal                 # all fees in the quote currency (coin fees valued at the trade price)
     transferred_out: Decimal
     transferred_out_cost: Decimal
+    transferred_out_average_cost: Optional[Decimal]   # cost per coin of what was moved out
     uncovered: Decimal            # sold / sent but not held according to the history
     price: Optional[Decimal]
     value: Optional[Decimal]
@@ -99,6 +100,7 @@ def summarize(events: Iterable[LedgerEvent], method: str = "average", price: Opt
     value = None if price is None else balance * price
     return CostSummary(
         method=method, balance=balance, cost=cost, average_cost=cost / balance if balance > 0 else None,
-        realized=realized, fees=fees, transferred_out=out_qty, transferred_out_cost=out_cost, uncovered=uncovered,
+        realized=realized, fees=fees, transferred_out=out_qty, transferred_out_cost=out_cost,
+        transferred_out_average_cost=out_cost / out_qty if out_qty > 0 else None, uncovered=uncovered,
         price=price, value=value, unrealized=None if value is None else value - cost,
     )

@@ -17,6 +17,10 @@ class Portfolio(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String, nullable=False)
     created_at = Column(DateTime, nullable=False, default=utcnow)
+    # "manual" = entered by hand; "import" = one exchange's imported history (never mixed)
+    kind = Column(String, nullable=False, default="manual", server_default="manual")
+    source = Column(String, nullable=True)                 # exchange of an import portfolio ("okx"); None = manual
+    cost_method = Column(String, nullable=False, default="average", server_default="average")  # details view
 
     user = relationship("User", back_populates="portfolios")
     positions = relationship(

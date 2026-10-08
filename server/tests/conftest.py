@@ -15,6 +15,7 @@ os.environ["ALLOW_REGISTRATION"] = "false"
 os.environ["ALERT_CHECK_SECONDS"] = "0"   # no background alert checker in tests
 os.environ["IMPORT_ON_STARTUP"] = "false"   # no folder import when the app starts in tests
 os.environ["IMPORT_DIR"] = str(Path(_tmp_dir, "imports"))
+os.environ["BACKUP_DIR"] = str(Path(_tmp_dir, "backups"))
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
