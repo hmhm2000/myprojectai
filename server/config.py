@@ -53,6 +53,11 @@ class Settings:
     # Alerts: seconds between checks (0 = checker disabled, e.g. in tests).
     alert_check_seconds: int
 
+    # Import of exchange exports: folder with the CSV files, import at start-up, account they belong to.
+    import_dir: Path
+    import_on_startup: bool
+    import_username: str
+
 
 def _load() -> Settings:
     secret_key = os.getenv("SECRET_KEY", "")
@@ -79,6 +84,9 @@ def _load() -> Settings:
         price_http_timeout_seconds=_int("PRICE_HTTP_TIMEOUT_SECONDS", 10),
         user_timezone=os.getenv("USER_TIMEZONE", "Europe/Warsaw").strip(),
         alert_check_seconds=_int("ALERT_CHECK_SECONDS", 60),
+        import_dir=Path(os.getenv("IMPORT_DIR") or BASE_DIR.parent / "data" / "imports" / "okx"),
+        import_on_startup=_bool("IMPORT_ON_STARTUP", True),
+        import_username=(os.getenv("IMPORT_USERNAME") or os.getenv("ADMIN_USERNAME") or "admin").strip(),
     )
 
 

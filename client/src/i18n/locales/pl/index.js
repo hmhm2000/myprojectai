@@ -11,6 +11,7 @@ import coins from "./coins.js";
 import common from "./common.js";
 import errors from "./errors.js";
 import favorites from "./favorites.js";
+import imports from "./imports.js";
 import journal from "./journal.js";
 import nav from "./nav.js";
 import portfolio from "./portfolio.js";
@@ -18,6 +19,7 @@ import position from "./position.js";
 import prices from "./prices.js";
 import sale from "./sale.js";
 import settings from "./settings.js";
+import transactions from "./transactions.js";
 
 export default {
   meta: {
@@ -32,11 +34,13 @@ export default {
   common,
   errors,
   favorites,
+  imports,
   journal,
   nav,
   portfolio,
   position,
   prices,
   sale,
+  transactions,
   settings,
 };
