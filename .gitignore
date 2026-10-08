@@ -62,3 +62,6 @@ ZMIANY.md
 
 #ignore pineScripts folder
 pineScripts/
+
+#ignore csv folder
+csv/
