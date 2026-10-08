@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { errorMessage } from "../api/client";
-import { importApi, portfoliosApi } from "../api/endpoints";
+import { importApi } from "../api/endpoints";
 import { ErrorBanner } from "../components/ui";
 import { hasTranslation, t } from "../i18n";
 import { fmtDateTime, fmtQty, fmtUnitPrice } from "../lib/format";
@@ -52,7 +52,6 @@ function Warnings({ warnings }) {
 /** Import panel: export files in the folder, "Synchronizuj", target portfolio and flagged entries. */
 export default function ImportPage() {
   const [status, setStatus] = useState(null);
-  const [portfolios, setPortfolios] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -61,6 +60,7 @@ export default function ImportPage() {
     setError(null);
     try {
       setStatus(await fn());
+      window.dispatchEvent(new Event("portfolios:changed"));   // new / changed import portfolios
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -70,7 +70,6 @@ export default function ImportPage() {
 
   useEffect(() => {
     run(importApi.status);
-    portfoliosApi.list().then(setPortfolios).catch(() => {});
   }, [run]);
 
   if (!status) return <p className="text-sm text-zinc-500">{error ?? t("common.loading")}</p>;
@@ -92,19 +91,17 @@ export default function ImportPage() {
         <div className="text-sm text-zinc-400">
           {t("imports.folder")}: <code className="break-all text-zinc-200">{status.folder}</code>
         </div>
-        <label className="flex flex-wrap items-center gap-2 text-sm text-zinc-400">
-          {t("imports.portfolio")}
-          <select value={status.portfolio_id ?? ""} className="text-sm"
-            onChange={(e) => run(() => importApi.settings({ portfolio_id: Number(e.target.value) }))}>
-            {status.portfolio_id === null && <option value="">{t("imports.portfolioAuto")}</option>}
-            {portfolios.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-          <span className="text-xs text-zinc-500">{t("imports.portfolioHint")}</span>
-        </label>
-        {status.portfolio_id && (
-          <Link to={`/transactions?portfolio=${status.portfolio_id}`} className="text-sm text-neon-green hover:underline">
-            {t("imports.openDetails")}
-          </Link>
+        <p className="text-xs text-zinc-500">{t("imports.portfolioHint")}</p>
+        {status.portfolios.length > 0 && (
+          <ul className="flex flex-wrap gap-3 text-sm">
+            {status.portfolios.map((p) => (
+              <li key={p.id}>
+                <Link to={`/transactions?portfolio=${p.id}`} className="text-neon-blue hover:underline">
+                  {t("imports.openDetails", { name: p.name })}
+                </Link>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 

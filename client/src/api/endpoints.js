@@ -89,7 +89,6 @@ export const chartIntervalsApi = {
 export const importApi = {
   status: () => data(api.get("/api/import")),
   sync: () => data(api.post("/api/import/sync")),
-  settings: (body) => data(api.put("/api/import/settings", body)),
   keep: (kind, id) => data(api.post("/api/import/missing/keep", { kind, id: String(id) })),
   remove: (kind, id) => data(api.post("/api/import/missing/delete", { kind, id: String(id) })),
 };
@@ -98,6 +97,12 @@ export const transactionsApi = {
   list: (portfolioId) => data(api.get(`/api/portfolios/${portfolioId}/transactions`)),
   summary: (portfolioId, params) => data(api.get(`/api/portfolios/${portfolioId}/cost-summary`, { params })),
   update: (kind, id, body) => api.patch(`/api/transactions/${kind}/${encodeURIComponent(id)}`, body),
+  setMethod: (portfolioId, method) => api.put(`/api/portfolios/${portfolioId}/cost-method`, { cost_method: method }),
+};
+
+export const maintenanceApi = {
+  cleanupPlan: () => data(api.get("/api/maintenance/manual-cleanup")),
+  cleanup: (body) => data(api.post("/api/maintenance/manual-cleanup", body)),
 };
 
 export const journalApi = {

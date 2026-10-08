@@ -1,14 +1,12 @@
 // Panel „Import”: pliki eksportu z giełdy w folderze, synchronizacja, wpisy nieobecne w eksporcie.
 export default {
   title: "Import",
-  intro: "Pliki CSV z giełdy (na razie OKX) z folderu poniżej. Import tworzy zwykłe pozycje i sprzedaże - tak jak formularz - w wybranym portfelu.",
+  intro: "Pliki CSV z giełdy (na razie OKX) z folderu poniżej. Każda giełda ma własny portfel importowany (np. „OKX”) - import tworzy w nim zwykłe pozycje i sprzedaże, tak jak formularz. Ręczne portfele nie są nigdy zmieniane.",
   sync: "Synchronizuj",
   syncing: "Synchronizowanie…",
   folder: "Folder",
-  portfolio: "Portfel dla importu",
-  portfolioAuto: "OKX (zostanie utworzony)",
-  portfolioHint: "Nowe transakcje trafią do tego portfela. Już zaimportowane zostają tam, gdzie są.",
-  openDetails: "Szczegóły transakcji tego portfela →",
+  portfolioHint: "Portfel giełdy tworzy się sam przy pierwszym imporcie z tej giełdy.",
+  openDetails: "Szczegóły transakcji: {{name}} →",
   lastSync: "Ostatnia synchronizacja",
   files: "Pliki w folderze",
   noFiles: "Brak plików CSV w folderze. Wrzuć tam eksport z OKX i kliknij „Synchronizuj”.",

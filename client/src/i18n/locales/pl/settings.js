@@ -11,6 +11,21 @@ export default {
     pairs: "{{count}} par",
     hint: "TTL, limit odświeżania i walutę zmienisz w {{file}} ({{keys}}).",
   },
+  // Jednorazowe czyszczenie ręcznych portfeli (np. przed przejściem na import z giełdy).
+  cleanup: {
+    title: "Czyszczenie ręcznych wpisów",
+    intro: "Usuwa ręczne pozycje i sprzedaże we wszystkich ręcznych portfelach - poza {{symbols}}. Portfele importowane z giełd nie są ruszane. Przed usunięciem zapisuje się kopia wszystkich ręcznych portfeli w data/backups/.",
+    dryRun: "Sprawdź, co zostanie usunięte",
+    summary: "Do usunięcia: {{positions}} pozycji i {{sales}} sprzedaży. Zostanie: {{keptPositions}} pozycji SPX i {{keptSales}} sprzedaży SPX.",
+    portfolio: "{{name}}: {{positions}} pozycji, {{sales}} sprzedaży do usunięcia, {{kept}} zostaje",
+    nothing: "Nie ma nic do usunięcia.",
+    deleteEmpty: "Usuń też ręczne portfele, które zostaną puste",
+    confirmWord: "USUŃ",
+    typeToConfirm: "Aby potwierdzić, wpisz {{word}}:",
+    execute: "Usuń {{positions}} pozycji i {{sales}} sprzedaży",
+    done: "Usunięto {{positions}} pozycji i {{sales}} sprzedaży. Kopia zapasowa: {{backup}}",
+    removedPortfolios: "Usunięte puste portfele: {{names}}.",
+  },
   account: {
     title: "Konto",
     username: "Użytkownik",

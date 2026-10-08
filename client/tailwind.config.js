@@ -14,6 +14,7 @@ export default {
         neon: {
           violet: "#a855f7",
           green: "#22e58a",
+          blue: "#38bdf8",
         },
         profit: "#34d399",
         loss: "#f87171",
@@ -25,6 +26,7 @@ export default {
       boxShadow: {
         "neon-violet": "0 0 24px -6px rgba(168, 85, 247, 0.55)",
         "neon-green": "0 0 24px -6px rgba(34, 229, 138, 0.5)",
+        "neon-blue": "0 0 24px -6px rgba(56, 189, 248, 0.55)",
       },
       keyframes: {
         "fade-in": { from: { opacity: 0, transform: "translateY(4px)" }, to: { opacity: 1, transform: "none" } },

@@ -62,6 +62,9 @@ export default function PortfoliosPage() {
 
   useEffect(() => {
     loadList();
+    // e.g. after "Synchronizuj" or the cleanup - refresh the list without reloading the page
+    window.addEventListener("portfolios:changed", loadList);
+    return () => window.removeEventListener("portfolios:changed", loadList);
   }, [loadList]);
 
   useEffect(() => {
@@ -149,7 +152,7 @@ export default function PortfoliosPage() {
             onClose={closeModal}
             onSubmit={async (name) => {
               const created = await portfoliosApi.create(name);
-              setPortfolios((list) => [...(list ?? []), { ...created, positions_count: 0 }]);
+              setPortfolios((list) => [...(list ?? []), { ...created, kind: "manual", positions_count: 0 }]);
               setSelectedId(created.id);
               setView(created);
             }}
@@ -284,25 +287,49 @@ export default function PortfoliosPage() {
     <div className="space-y-6">
       {/* Portfolio selector */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
-          {portfolios.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => setSelectedId(p.id)}
-              className={`shrink-0 rounded-xl border px-3.5 py-2 text-left transition ${
-                p.id === selectedId
-                  ? "border-neon-violet/50 bg-neon-violet/10 shadow-neon-violet"
-                  : "border-white/[0.06] bg-ink-900 hover:border-white/15"
-              }`}
-            >
-              <div className="text-sm font-medium text-zinc-100">{p.name}</div>
-              <div className="num text-[11px] text-zinc-500">{fmtMoney(p.summary.value)}</div>
-            </button>
-          ))}
-          <button type="button" className="btn-ghost shrink-0 self-stretch" onClick={() => setModal({ type: "createPortfolio" })}>
-            <PlusIcon size={16} /> {t("portfolio.page.newPortfolio")}
-          </button>
+        <div className="space-y-2">
+          {[["import", t("portfolio.page.imported")], ["manual", t("portfolio.page.manual")]].map(([kind, label]) => {
+            const list = portfolios.filter((p) => (p.kind ?? "manual") === kind);
+            if (!list.length && kind === "import") return null;
+            return (
+              <div key={kind} className="flex items-center gap-2">
+                <span className="w-24 shrink-0 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">{label}</span>
+                <div className="-mr-4 flex min-w-0 gap-2 overflow-x-auto pb-1 pr-4 sm:mr-0 sm:flex-wrap sm:pr-0">
+                  {list.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setSelectedId(p.id)}
+                      className={`shrink-0 rounded-xl border px-3.5 py-2 text-left transition ${
+                        p.kind === "import"
+                          ? p.id === selectedId
+                            ? "border-neon-blue/70 bg-neon-blue/10 shadow-neon-blue"
+                            : "border-neon-blue/30 bg-ink-900 hover:border-neon-blue/60"
+                          : p.id === selectedId
+                            ? "border-neon-violet/50 bg-neon-violet/10 shadow-neon-violet"
+                            : "border-white/[0.06] bg-ink-900 hover:border-white/15"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 text-sm font-medium text-zinc-100">
+                        {p.name}
+                        {p.kind === "import" && (
+                          <span className="rounded bg-neon-blue/15 px-1 text-[9px] font-semibold uppercase tracking-wider text-neon-blue">
+                            {p.source}
+                          </span>
+                        )}
+                      </div>
+                      <div className="num text-[11px] text-zinc-500">{fmtMoney(p.summary.value)}</div>
+                    </button>
+                  ))}
+                  {kind === "manual" && (
+                    <button type="button" className="btn-ghost shrink-0 self-stretch" onClick={() => setModal({ type: "createPortfolio" })}>
+                      <PlusIcon size={16} /> {t("portfolio.page.newPortfolio")}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         {selected && (

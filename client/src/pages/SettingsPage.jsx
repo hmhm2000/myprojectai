@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { API_URL, errorMessage } from "../api/client";
 import { usersApi } from "../api/endpoints";
+import ManualCleanup from "../components/ManualCleanup";
 import PriceStatusBar from "../components/PriceStatusBar";
 import { ErrorBanner } from "../components/ui";
 import { useAuth, usePrices } from "../context/contexts";
@@ -134,6 +135,12 @@ export default function SettingsPage() {
         </p>
         <button type="button" className="btn-ghost mt-4" onClick={logout}>{t("nav.logout")}</button>
       </Section>
+
+      <div className="lg:col-span-2">
+        <Section title={t("settings.cleanup.title")}>
+          <ManualCleanup />
+        </Section>
+      </div>
 
       {user.is_admin && (
         <div className="lg:col-span-2">

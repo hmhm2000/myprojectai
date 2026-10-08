@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { errorMessage } from "../api/client";
-import { importApi, portfoliosApi, transactionsApi } from "../api/endpoints";
+import { portfoliosApi, transactionsApi } from "../api/endpoints";
 import { ErrorBanner, Pnl } from "../components/ui";
 import { t } from "../i18n";
 import { fmtDateTime, fmtMoney, fmtQty, fmtUnitPrice } from "../lib/format";
@@ -65,7 +65,14 @@ function CostSummary({ portfolioId, method, onMethod, symbolFilter }) {
                 <td className="px-2 py-1.5"><Pnl value={r.realized} /></td>
                 <td className="px-2 py-1.5 text-zinc-400">{fmtMoney(r.fees)}</td>
                 <td className="px-2 py-1.5 text-zinc-400">
-                  {Number(r.transferred_out) ? `${fmtQty(r.transferred_out)} (${fmtMoney(r.transferred_out_cost)})` : "—"}
+                  {Number(r.transferred_out) ? (
+                    <>
+                      {fmtQty(r.transferred_out)} ({fmtMoney(r.transferred_out_cost)})
+                      <div className="text-[11px] text-zinc-500">
+                        {t("transactions.summary.outAverage", { price: fmtUnitPrice(r.transferred_out_average_cost) })}
+                      </div>
+                    </>
+                  ) : "—"}
                 </td>
                 <td className="px-2 py-1.5">
                   <form className="flex items-center gap-1" onSubmit={(e) => { e.preventDefault(); applyPrice(r.symbol); }}>
@@ -205,12 +212,8 @@ export default function TransactionsPage() {
   const portfolioId = Number(params.get("portfolio")) || portfolios[0]?.id;
 
   useEffect(() => {
-    portfoliosApi.list().then(setPortfolios).catch((err) => setError(errorMessage(err)));
-    importApi.status().then((s) => {
-      setMethod(s.cost_method);
-      if (!params.get("portfolio") && s.portfolio_id) setParams({ portfolio: s.portfolio_id }, { replace: true });
-    }).catch(() => {});
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    portfoliosApi.list().then(setPortfolios).catch((err) => setError(errorMessage(err)));   // imported first
+  }, []);
 
   const load = useCallback(() => {
     if (!portfolioId) return;
@@ -218,9 +221,14 @@ export default function TransactionsPage() {
   }, [portfolioId]);
   useEffect(load, [load]);
 
+  // the cost method is remembered per portfolio
+  useEffect(() => {
+    if (portfolioId) portfoliosApi.get(portfolioId).then((p) => setMethod(p.cost_method ?? "average")).catch(() => {});
+  }, [portfolioId]);
+
   const changeMethod = (m) => {
     setMethod(m);
-    importApi.settings({ cost_method: m }).catch(() => {});
+    transactionsApi.setMethod(portfolioId, m).catch(() => {});
   };
 
   const options = useMemo(() => ({
@@ -235,7 +243,9 @@ export default function TransactionsPage() {
       <div className="flex flex-wrap items-end gap-3">
         <h1 className="mr-auto text-lg font-semibold text-zinc-100">{t("transactions.title")}</h1>
         <select value={portfolioId ?? ""} className="text-sm" onChange={(e) => setParams({ portfolio: e.target.value })}>
-          {portfolios.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          {portfolios.map((p) => (
+            <option key={p.id} value={p.id}>{p.kind === "import" ? `${p.name} (${t("transactions.imported")})` : p.name}</option>
+          ))}
         </select>
         {Object.keys(filters).map((k) => (
           <select key={k} value={filters[k]} className="text-sm" onChange={(e) => setFilters({ ...filters, [k]: e.target.value })}>
