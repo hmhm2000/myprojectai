@@ -49,9 +49,15 @@ def change_pct(price: Decimal, open_24h: Optional[Decimal]) -> Optional[Decimal]
     return ((price - open_24h) / open_24h * 100).quantize(Decimal("0.01"))
 
 
+# One shared session: connections to the exchanges are kept open (keep-alive), so a request does not
+# pay for a new TCP + TLS handshake (~200-300 ms each). Sized for parallel page / window fetches.
+_session = requests.Session()
+_session.mount("https://", requests.adapters.HTTPAdapter(pool_connections=8, pool_maxsize=16))
+
+
 def get_json(url: str, params: dict, timeout: float, exchange: str) -> dict:
     try:
-        response = requests.get(url, params=params, timeout=timeout)
+        response = _session.get(url, params=params, timeout=timeout)
     except requests.RequestException as exc:
         raise ProviderError("connection_error", f"{exchange}: connection failed ({exc.__class__.__name__})") from exc
 

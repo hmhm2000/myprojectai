@@ -78,7 +78,7 @@ class DailyExchange:
 def test_range_cache_fetches_only_missing_parts():
     exchange = DailyExchange()
     clock = {"now": ts(2026, 3, 1, 12)}
-    service = CandleService(Prices(), {"bybit": exchange}, now=lambda: clock["now"])
+    service = CandleService(Prices(), {"bybit": exchange}, now=lambda: clock["now"], history_margin=0)
 
     service.get_candles("BTC", "1d", ts(2026, 2, 1), clock["now"])
     assert len(exchange.calls) == 1
@@ -99,6 +99,22 @@ def test_range_cache_fetches_only_missing_parts():
     clock["now"] += 11                                                      # 31 s since the last live fetch
     service.get_candles("BTC", "1d", ts(2026, 2, 1), clock["now"])
     assert len(exchange.calls) == 3 and exchange.calls[-1][1] == ts(2026, 3, 1)   # from the last stored candle
+
+
+def test_older_history_comes_with_a_warmup_margin():
+    exchange = DailyExchange()
+    now = ts(2026, 3, 1, 12)
+    service = CandleService(Prices(), {"bybit": exchange}, now=lambda: now, history_margin=10)
+
+    series = service.get_candles("BTC", "1d", ts(2026, 2, 1), now)
+    assert exchange.calls[-1][1] == ts(2026, 2, 1) - 10 * DAY                 # 10 extra older candles
+    assert series.candles[0].time == ts(2026, 2, 1)                           # only the asked range returned
+
+    service.get_candles("BTC", "1d", ts(2026, 1, 25), now)                   # indicator warmup: in memory
+    assert len(exchange.calls) == 1
+
+    service.get_candles("BTC", "1d", ts(2026, 1, 1), now)                    # further back: again with margin
+    assert exchange.calls[-1][1:] == (ts(2026, 1, 1) - 10 * DAY, ts(2026, 2, 1) - 10 * DAY - 1)
 
 
 def test_month_chart_times_and_is_closed():

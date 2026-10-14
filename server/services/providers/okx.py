@@ -2,7 +2,11 @@
 
 One request returns all spot pairs. Pair format: "BTC-USDT".
 """
-from services.providers.base import Candle, ProviderError, Ticker, change_pct, get_json, parse_candle_row, to_decimal
+import math
+from concurrent.futures import ThreadPoolExecutor
+
+from services.providers.base import (INTERVAL_SECONDS, Candle, ProviderError, Ticker, change_pct, get_json,
+                                     parse_candle_row, to_decimal)
 
 TICKERS_URL = "https://www.okx.com/api/v5/market/tickers"
 
@@ -36,26 +40,43 @@ CANDLES_URL = "https://www.okx.com/api/v5/market/history-candles"
 OKX_BARS = {"1m": "1m", "5m": "5m", "15m": "15m", "30m": "30m", "1h": "1H", "4h": "4H", "1d": "1Dutc",
             "1w": "1Wutc", "1M": "1Mutc"}
 OKX_PAGE = 100  # history-candles returns at most 100 rows per request
+OKX_PARALLEL = 4  # pages fetched at once (OKX allows 20 history-candles requests per 2 s)
 
 
 def fetch_candles(symbol: str, quote: str, interval: str, start_ms: int, end_ms: int,
                   max_candles: int, timeout: float, market: str = "spot") -> list[Candle]:
     """Candles in [start_ms, end_ms], oldest first. Pages backwards from end_ms (`after` = older than).
+    With a fixed candle length the page cursors are known up front, so the pages are fetched in parallel
+    (a gap on the exchange only makes a page reach further back - pages overlap, nothing is skipped).
     market: "spot" or "perp" (USDT perpetual swap; volume in contracts)."""
     inst_id = f"{symbol}-{quote}-SWAP" if market == "perp" else f"{symbol}-{quote}"
-    candles: dict[int, Candle] = {}
-    cursor = end_ms + 1
-    while len(candles) < max_candles:
+    step_ms = INTERVAL_SECONDS.get(interval, 0) * 1000
+
+    def page_from(cursor: int) -> tuple[list[Candle], int]:
         payload = get_json(CANDLES_URL, {"instId": inst_id, "bar": OKX_BARS[interval],
                                          "after": str(cursor), "limit": str(OKX_PAGE)}, timeout, "OKX")
         if str(payload.get("code")) != "0":
             raise ProviderError("api_error", f"OKX: API error {payload.get('code')}: {payload.get('msg')}")
         rows = payload.get("data") or []
-        page = [c for c in (parse_candle_row(r) for r in rows) if c]
+        return [c for c in (parse_candle_row(r) for r in rows) if c], len(rows)
+
+    candles: dict[int, Candle] = {}
+    wanted = min(max_candles, math.ceil((end_ms - start_ms) / step_ms) + 1) if step_ms else max_candles
+    pages = math.ceil(wanted / OKX_PAGE)
+    if step_ms and pages > 1:
+        cursors = [end_ms + 1 - i * OKX_PAGE * step_ms for i in range(pages)]
+        with ThreadPoolExecutor(max_workers=min(OKX_PARALLEL, pages)) as pool:
+            for page, _ in pool.map(page_from, cursors):
+                candles.update({c.time: c for c in page if c.time * 1000 >= start_ms})
+        return sorted(candles.values(), key=lambda c: c.time)[-max_candles:]
+
+    cursor = end_ms + 1
+    while len(candles) < max_candles:
+        page, count = page_from(cursor)
         for candle in page:
             if candle.time * 1000 >= start_ms:
                 candles[candle.time] = candle
-        if len(rows) < OKX_PAGE or not page or min(c.time for c in page) * 1000 <= start_ms:
+        if count < OKX_PAGE or not page or min(c.time for c in page) * 1000 <= start_ms:
             break
         cursor = min(c.time for c in page) * 1000
     return sorted(candles.values(), key=lambda c: c.time)[-max_candles:]

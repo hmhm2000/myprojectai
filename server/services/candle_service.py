@@ -7,6 +7,9 @@
   the missing part is fetched (older history, or the newest candles once LIVE_TTL_SECONDS passed).
   So the chart, each indicator and alerts share the same data, and switching intervals back and
   forth does not download the history again.
+- History margin: older history is always fetched with HISTORY_MARGIN extra candles, so the warmup of
+  every indicator on a just-opened chart is already in memory (one exchange call instead of one per
+  indicator - they would wait for each other on the range lock).
 - Custom intervals (3d, 2w, 2h, 3M ...) are aggregated from their native base interval
   (see services/intervals.py) - the base candles come from the same cache.
 """
@@ -35,6 +38,8 @@ PERP_SOURCES = ["bybit_perp", "okx_perp"]   # USDT perpetuals (e.g. PVSRA volume
 MISSING_SYMBOL_SECONDS = 600                # a source that does not list a symbol is skipped for it a while
 LIVE_TTL_SECONDS = 30
 SOURCE_BACKOFF_SECONDS = 30   # a source that just failed is skipped for a while (if another one exists)
+HISTORY_MARGIN = 450        # extra older candles with any older history: covers every indicator's warmup
+                            # (largest: VuManChu 380); a 500-candle chart + margin = one Bybit request (1000)
 MAX_STORES = 200            # (source, symbol, interval) ranges kept in memory
 MAX_STORE_CANDLES = 100_000
 MAX_CANDLES = 20_000        # per request (custom intervals need several base candles each)
@@ -62,8 +67,9 @@ class _Store:
 
 class CandleService:
     def __init__(self, prices: PriceService, fetchers: dict[str, Callable] = FETCHERS,
-                 timeout: float = 10, now: Callable[[], float] = time.time):
+                 timeout: float = 10, now: Callable[[], float] = time.time, history_margin: int = HISTORY_MARGIN):
         self._prices = prices
+        self._history_margin = history_margin
         self._fetchers = fetchers
         self._timeout = timeout
         self._now = now
@@ -129,16 +135,17 @@ class CandleService:
             with self._lock:
                 store = self._stores.get(key)
             live = end >= now - spec.seconds
+            older_from = max(0, start - self._history_margin * spec.seconds)   # with the warmup margin
 
             if store is None:
                 # `refreshed` = time of the last fetch that reached "now" (0 = newest candles never fetched)
-                store = _Store(start, end, now if live else 0.0)
-                store.candles.update({c.time: c for c in self._fetch(source, symbol, spec, start, end)})
+                store = _Store(older_from, end, now if live else 0.0)
+                store.candles.update({c.time: c for c in self._fetch(source, symbol, spec, older_from, end)})
             else:
                 if start < store.start:                  # older history -> fetch only that part
-                    older = self._fetch(source, symbol, spec, start, store.start - 1)
+                    older = self._fetch(source, symbol, spec, older_from, store.start - 1)
                     store.candles.update({c.time: c for c in older})
-                    store.start = start
+                    store.start = older_from
                 stale_tail = now - store.refreshed >= LIVE_TTL_SECONDS
                 if (live and stale_tail) or (not live and end > store.end):
                     # newest candles: from the last stored one (it may have been still forming)

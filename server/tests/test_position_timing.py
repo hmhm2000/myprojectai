@@ -118,7 +118,8 @@ def test_candle_service_fallback_and_cache():
         calls.append("okx")
         return [candle(start_ms // 1000, "1")]
 
-    service = CandleService(FakePrices(["okx", "bybit"]), {"bybit": failing, "okx": working}, now=lambda: 10 * H)
+    service = CandleService(FakePrices(["okx", "bybit"]), {"bybit": failing, "okx": working}, now=lambda: 10 * H,
+                            history_margin=0)
     series = service.get_candles("BTC", "1h", H + 5, 3 * H)
     assert series.source == "okx" and calls == ["bybit", "okx"]   # Bybit preferred, falls back to OKX
     assert series.candles[0].time == H                              # start floored to the candle boundary
@@ -131,3 +132,22 @@ def test_candle_service_fallback_and_cache():
     with pytest.raises(AppError) as exc:
         service.get_candles("BTC", "2x", 0, H)
     assert exc.value.code == "candles.invalid_interval"
+
+
+def test_okx_candles_pages_fetched_in_parallel(monkeypatch):
+    import threading
+    import services.providers.okx as okx_module
+
+    cursors, lock = [], threading.Lock()
+    def fake_get_json(url, params, timeout, exchange):
+        cursor = int(params["after"])
+        with lock:
+            cursors.append(cursor)
+        newest = (cursor - 1) // (H * 1000) * H                       # 100 hourly candles older than the cursor
+        rows = [[str(t * 1000), "1", "2", "0.5", "1.5", "10"] for t in range(newest, max(newest - 100 * H, -H), -H)]
+        return {"code": "0", "data": rows}
+    monkeypatch.setattr(okx_module, "get_json", fake_get_json)
+
+    candles = okx_module.fetch_candles("BTC", "USDT", "1h", 50 * H * 1000, 349 * H * 1000, 1000, 5)
+    assert [c.time for c in candles] == list(range(50 * H, 350 * H, H))   # 300 candles, no gaps, no extras
+    assert sorted(cursors, reverse=True) == [349 * H * 1000 + 1, 249 * H * 1000 + 1, 149 * H * 1000 + 1]

@@ -4,12 +4,16 @@
 - OKX:   GET /api/v5/rubik/stat/contracts/open-interest-history (instId <COIN>-USDT-SWAP, 100 per page).
 A point (t, oi) is the open interest AT time t. The OI "close" of a candle is the point at the candle's
 end - see indicators/context.py. Periods: 5m 15m 30m 1h 4h 1d (other intervals use the largest one
-that divides them; 1m uses 5m). Results are cached per (symbol, period) and refreshed after a minute.
+that divides them; 1m uses 5m).
+Cache per (symbol, period): one contiguous range of points. Older history is fetched only for the missing
+part, and after REFRESH_SECONDS only the newest points (not the whole history again). A long range is split
+into page-sized time windows fetched in parallel - one round trip instead of one per page.
 """
 from __future__ import annotations
 
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Callable
 
 from config import settings
@@ -25,6 +29,8 @@ OKX_PERIODS = {"5m": "5m", "15m": "15m", "30m": "30m", "1h": "1H", "4h": "4H", "
 REFRESH_SECONDS = 60
 MAX_PAGES = 40
 MAX_CACHE = 100
+PAGE_POINTS = {"bybit": 200, "okx": 100}   # points per request - the size of one parallel time window
+PARALLEL = 8
 
 
 def period_for(interval: str) -> str:
@@ -54,7 +60,7 @@ def fetch_bybit(symbol: str, quote: str, period: str, start: int, end: int, time
             if value is not None and row.get("timestamp"):
                 points[int(row["timestamp"]) // 1000] = float(value)
         cursor = result.get("nextPageCursor")
-        if not cursor or not result.get("list"):
+        if not cursor or len(result.get("list") or []) < 200:   # a short page is the last one
             break
     return sorted(points.items())
 
@@ -90,34 +96,68 @@ class OpenInterestService:
         self._fetchers = fetchers
         self._timeout = timeout
         self._now = now
-        self._cache: dict[tuple[str, str], tuple[int, float, list[tuple[int, float]]]] = {}
+        self._cache: dict[tuple[str, str], dict] = {}   # key -> {"source", "start", "refreshed", "points": {t: oi}}
         self._lock = threading.Lock()
+        self._key_locks: dict[tuple[str, str], threading.Lock] = {}
 
     def get(self, symbol: str, period: str, start: int, end: int) -> list[tuple[int, float]]:
         """(time, open interest) points in [start, end], oldest first."""
-        now = self._now()
         key = (symbol, period)
         with self._lock:
-            cached = self._cache.get(key)
-        if cached and cached[0] <= start and now - cached[1] < REFRESH_SECONDS:
-            return [p for p in cached[2] if start <= p[0] <= end]
+            key_lock = self._key_locks.setdefault(key, threading.Lock())
+        with key_lock:                                   # two charts of one coin: one download
+            now = self._now()
+            with self._lock:
+                entry = self._cache.get(key)
+            if entry is None:
+                source, points = self._first_fetch(symbol, period, start, int(now))
+                entry = {"source": source, "start": start, "refreshed": now, "points": dict(points)}
+            else:
+                fetch = self._fetchers[entry["source"]]
+                try:
+                    if start < entry["start"]:           # older history: only the missing part
+                        entry["points"].update(self._windows(fetch, entry["source"], symbol, period, start, entry["start"]))
+                        entry["start"] = start
+                    if now - entry["refreshed"] >= REFRESH_SECONDS:   # newest points only
+                        last = max(entry["points"], default=entry["start"])
+                        entry["points"].update(self._windows(fetch, entry["source"], symbol, period, last, int(now)))
+                        entry["refreshed"] = now
+                except ProviderError as exc:
+                    if not entry["points"]:
+                        raise AppError(502, "candles.unavailable", f"Open interest unavailable: {exc}")
+                    # keep serving what is cached; it is retried on the next request
+            with self._lock:
+                self._cache[key] = entry
+                while len(self._cache) > MAX_CACHE:
+                    self._cache.pop(next(iter(self._cache)))
+            return sorted((t, v) for t, v in entry["points"].items() if start <= t <= end)
+
+    def _first_fetch(self, symbol: str, period: str, start: int, end: int) -> tuple[str, list[tuple[int, float]]]:
         last_error = None
         for name, fetch in self._fetchers.items():
             try:
-                points = fetch(symbol, self._quote, period, start, int(now), self._timeout)
+                points = self._windows(fetch, name, symbol, period, start, end)
             except ProviderError as exc:
                 last_error = exc
                 continue
-            if not points:
-                continue
-            with self._lock:
-                self._cache[key] = (start, now, points)
-                while len(self._cache) > MAX_CACHE:
-                    self._cache.pop(next(iter(self._cache)))
-            return [p for p in points if start <= p[0] <= end]
+            if points:
+                return name, points
         if last_error and last_error.code != "api_error":
             raise AppError(502, "candles.unavailable", f"Open interest unavailable: {last_error}")
         raise NotFound("candles.symbol_not_found", f"No open interest for {symbol}", symbol=symbol)
+
+    def _windows(self, fetch: Callable, source: str, symbol: str, period: str, start: int, end: int) -> list[tuple[int, float]]:
+        """[start, end] split into page-sized time windows, fetched in parallel (each still pages if needed)."""
+        span = PAGE_POINTS.get(source, 100) * parse(period).seconds
+        bounds = [(t, min(t + span - 1, end)) for t in range(start, end + 1, span)] or [(start, end)]
+        if len(bounds) == 1:
+            return fetch(symbol, self._quote, period, start, end, self._timeout)
+        with ThreadPoolExecutor(max_workers=min(PARALLEL, len(bounds))) as pool:
+            parts = list(pool.map(lambda b: fetch(symbol, self._quote, period, b[0], b[1], self._timeout), bounds))
+        merged: dict[int, float] = {}
+        for part in parts:
+            merged.update(part)
+        return sorted(merged.items())
 
 
 open_interest_service = OpenInterestService(settings.quote_currency, timeout=settings.price_http_timeout_seconds)

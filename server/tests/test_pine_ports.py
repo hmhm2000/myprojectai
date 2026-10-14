@@ -265,14 +265,15 @@ def test_open_interest_close_is_value_at_candle_end(monkeypatch):
 def test_bybit_open_interest_paging(monkeypatch):
     import services.open_interest as oi_module
 
-    pages = {None: ([{"openInterest": "5", "timestamp": "7200000"}, {"openInterest": "4", "timestamp": "3600000"}], "next"),
-             "next": ([{"openInterest": "3", "timestamp": "0"}], "")}
+    full = [{"openInterest": str(i), "timestamp": str(i * 3600 * 1000)} for i in range(400, 200, -1)]   # 200 rows
+    pages = {None: (full, "next"), "next": ([{"openInterest": "3", "timestamp": "0"}], "more")}  # short page = last
     def fake_get_json(url, params, timeout, exchange):
         rows, cursor = pages[params.get("cursor")]
         assert params["category"] == "linear" and params["symbol"] == "BTCUSDT" and params["intervalTime"] == "1h"
         return {"retCode": 0, "result": {"list": rows, "nextPageCursor": cursor}}
     monkeypatch.setattr(oi_module, "get_json", fake_get_json)
-    assert oi_module.fetch_bybit("BTC", "USDT", "1h", 0, 7200, 5) == [(0, 3.0), (3600, 4.0), (7200, 5.0)]
+    points = oi_module.fetch_bybit("BTC", "USDT", "1h", 0, 400 * 3600, 5)
+    assert points[0] == (0, 3.0) and points[1] == (201 * 3600, 201.0) and len(points) == 201
 
 
 def test_vmc_reads_other_timeframes_only_when_used():
@@ -365,3 +366,31 @@ def test_bull_market_support_band_uses_weekly_candles():
     # the newest daily candle shows the forming week: SMA 20 of the weekly closes
     assert out["sma"][-1] == pytest.approx(sum(closes[-20:]) / 20)
     assert len(set(out["sma"][-14:-7])) <= 2                              # constant within a week
+
+
+def test_open_interest_cache_fetches_windows_and_only_new_points():
+    import threading
+    import services.open_interest as oi_module
+
+    calls, lock = [], threading.Lock()
+    clock = {"now": 1000 * H}
+    def fake_fetch(symbol, quote, period, start, end, timeout):
+        with lock:
+            calls.append((start, end))
+        return [(t, float(t // H)) for t in range(start - start % H + (H if start % H else 0), min(end, int(clock["now"])) + 1, H)]
+    service = oi_module.OpenInterestService("USDT", {"bybit": fake_fetch}, now=lambda: clock["now"])
+
+    points = service.get("BTC", "1h", 500 * H, 1000 * H)            # 501 hours -> 3 windows of 200 points
+    assert len(calls) == 3 and points[0] == (500 * H, 500.0) and points[-1] == (1000 * H, 1000.0)
+    assert len(points) == 501
+
+    service.get("BTC", "1h", 600 * H, 1000 * H)                     # cached and fresh: no request
+    assert len(calls) == 3
+
+    clock["now"] += 2 * H                                            # a minute later: only the newest points
+    points = service.get("BTC", "1h", 600 * H, 1002 * H)
+    assert calls[-1] == (1000 * H, 1002 * H) and points[-1] == (1002 * H, 1002.0)
+
+    calls.clear()
+    service.get("BTC", "1h", 400 * H, 1002 * H)                     # older history: only the missing part
+    assert calls == [(400 * H, 500 * H)]
