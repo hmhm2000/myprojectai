@@ -13,11 +13,12 @@ import { useLiftSort } from "./useLiftSort";
 export default function IndicatorSidebar({ definitions, items, chartInterval, api, onChanged }) {
   const [modal, setModal] = useState(null); // { item } for edit, {} for add
 
-  const save = async ({ indicator_id, params, interval, axis_value }) => {
+  const save = async ({ indicator_id, params, interval, axis_value, styles, pane_height }) => {
     if (modal.item) {
-      await api.update(modal.item.id, { params, interval, follow_chart: !interval, axis_value });
+      await api.update(modal.item.id, { params, interval, follow_chart: !interval, axis_value, styles, pane_height });
     } else {
-      await api.add({ indicator_id, params, interval, axis_value });
+      const added = await api.add({ indicator_id, params, interval, axis_value, styles });
+      if (pane_height) await api.update(added.id, { pane_height });
     }
     onChanged();
   };

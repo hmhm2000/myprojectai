@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { summaryText } from "../../lib/indicatorMeta";
-import { labelColor } from "./indicatorSeries";
+import { labelColor, styledDef } from "./indicatorSeries";
 
 const POLL_MS = 400; // pane borders can be dragged and the chart resized - positions are re-read this often
 
@@ -18,7 +18,7 @@ export default function IndicatorNames({ chartApi, indicators, definitions }) {
     return indicators.map((a) => {
       const def = definitions.find((d) => d.id === a.id);
       if (!def) return null;
-      return { uid: a.uid, pane: def.pane === "overlay" ? 0 : ++pane, text: summaryText(def, a.params), color: labelColor(def, a.params) };
+      return { uid: a.uid, pane: def.pane === "overlay" ? 0 : ++pane, text: summaryText(def, a.params), color: labelColor(styledDef(def, a.styles), a.params) };
     }).filter(Boolean);
   }, [indicators, definitions]);
 

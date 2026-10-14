@@ -3,16 +3,19 @@ import { errorMessage } from "../../api/client";
 import { t } from "../../i18n";
 import Modal from "../Modal";
 import { Field } from "../ui";
-import { defaultParams as defaults } from "../../lib/indicatorMeta";
+import { defaultParams as defaults, styleColorParams } from "../../lib/indicatorMeta";
 import { intervalLabel, intervalOptions } from "../../lib/intervals";
 import { useChartIntervals } from "../../lib/useChartIntervals";
-import { axisValueOf } from "./indicatorSeries";
+import { axisValueOf, paneHeight as defaultPaneHeight } from "./indicatorSeries";
 import ParamFields from "./ParamFields";
+import StyleFields from "./StyleFields";
 
 /**
  * Add / edit one chart indicator. The fields come from the indicator definition (backend), so every
  * indicator gets its own settings; plus the timeframe it is computed on ("" = follow the chart).
- * `item` = saved settings (edit) or null (add). onSave({ indicator_id, params, interval, axis_value }).
+ * Style section: own color / opacity / thickness / line style of every drawn output; own pane height.
+ * `item` = saved settings (edit) or null (add).
+ * onSave({ indicator_id, params, interval, axis_value, styles, pane_height }) - pane_height 0 = default.
  */
 export default function IndicatorModal({ definitions, item = null, onSave, onReset, onClose }) {
   const editing = Boolean(item);
@@ -22,6 +25,8 @@ export default function IndicatorModal({ definitions, item = null, onSave, onRes
   const [params, setParams] = useState(item?.params ?? (def ? defaults(def) : {}));
   const [interval, setInterval] = useState(item?.interval ?? "");
   const [axisValue, setAxisValue] = useState(item ? axisValueOf(item, def) : def?.pane === "overlay");
+  const [styles, setStyles] = useState(item?.styles ?? {});
+  const [height, setHeight] = useState(item?.pane_height ? String(item.pane_height) : "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -30,6 +35,8 @@ export default function IndicatorModal({ definitions, item = null, onSave, onRes
     const next = definitions.find((d) => d.id === id);
     setParams(next ? defaults(next) : {});
     setAxisValue(next?.pane === "overlay");
+    setStyles({});
+    setHeight("");
   };
 
   const run = async (fn) => {
@@ -46,7 +53,8 @@ export default function IndicatorModal({ definitions, item = null, onSave, onRes
 
   const submit = (e) => {
     e.preventDefault();
-    run(() => onSave({ indicator_id: indicatorId, params, interval: interval || null, axis_value: axisValue }));
+    run(() => onSave({ indicator_id: indicatorId, params, interval: interval || null, axis_value: axisValue, styles,
+      pane_height: def?.pane === "overlay" ? 0 : Math.round(Number(height)) || 0 }));
   };
 
   return (
@@ -62,10 +70,11 @@ export default function IndicatorModal({ definitions, item = null, onSave, onRes
         )}
         {def?.description && <p className="text-xs text-zinc-500">{def.description}</p>}
 
-        {def && <ParamFields def={def} params={params} onChange={setParams} />}
+        {def && <ParamFields def={def} params={params} onChange={setParams} hidden={styleColorParams(def)} />}
+        {def && <StyleFields def={def} params={params} styles={styles} onStyles={setStyles} onParams={setParams} />}
         {def && (
           <button type="button" className="text-xs text-zinc-400 hover:text-zinc-200 hover:underline"
-            onClick={() => setParams(defaults(def))}>
+            onClick={() => { setParams(defaults(def)); setStyles({}); setHeight(""); }}>
             {t("chart.indicators.defaultsInForm")}
           </button>
         )}
@@ -83,6 +92,13 @@ export default function IndicatorModal({ definitions, item = null, onSave, onRes
               {intervalOptions(intervals, interval).map((i) => <option key={i} value={i}>{intervalLabel(i)}</option>)}
             </select>
           </Field>
+          {def && def.pane !== "overlay" && (
+            <Field label={t("chart.style.paneHeight")} htmlFor="ind-height" hint={t("chart.style.paneHeightHint")}>
+              <input id="ind-height" type="number" min={20} max={2000} step={1} className="w-full" value={height}
+                placeholder={t("chart.style.paneHeightAuto", { px: defaultPaneHeight(def) })}
+                onChange={(e) => setHeight(e.target.value)} />
+            </Field>
+          )}
         </div>
 
         {error && <p className="text-sm text-loss">{error}</p>}

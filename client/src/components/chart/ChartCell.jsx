@@ -10,20 +10,27 @@ import { useIndicators } from "./useIndicators";
  * Clicking anywhere in it makes it the active window (the toolbar and the side column work on it).
  */
 function ChartCell({ slot, symbol, interval, indicators, definitions, markers, active, split, showNames,
-  onActivate, onMarkerClick }) {
+  onActivate, onMarkerClick, onPaneResize }) {
   const [chartApi, setChartApi] = useState(null);
-  // visible saved indicators of this window, in the shape useIndicators expects
+  // visible saved indicators of this window, in the shape useIndicators expects; rebuilt (= series drawn
+  // again) only when what is drawn changes - not when only a saved pane height changes
+  const drawn = JSON.stringify(indicators.filter((i) => i.visible)
+    .map((i) => [i.id, i.indicator_id, i.params, i.interval, i.axis_value, i.styles ?? {}]));
   const activeIndicators = useMemo(
-    () => indicators.filter((i) => i.visible).map((i) => ({
-      uid: `${i.id}-${i.interval}-${JSON.stringify(i.params)}`, id: i.indicator_id, params: i.params, interval: i.interval,
-      axisValue: axisValueOf(i, definitions.find((d) => d.id === i.indicator_id)),
+    () => JSON.parse(drawn).map(([itemId, id, params, ownInterval, axis_value, styles]) => ({
+      uid: `${itemId}-${ownInterval}-${JSON.stringify(params)}`, itemId, id, params, interval: ownInterval, styles,
+      axisValue: axisValueOf({ axis_value }, definitions.find((d) => d.id === id)),
     })),
-    [indicators, definitions],
+    [drawn, definitions],
+  );
+  const paneHeights = useMemo(
+    () => Object.fromEntries(indicators.filter((i) => i.pane_height).map((i) => [i.id, i.pane_height])),
+    [indicators],
   );
   // phones: price pane + every indicator pane below it (px)
   const minHeight = PRICE_PANE_MIN + 30 + activeIndicators
-    .reduce((sum, a) => sum + paneHeight(definitions.find((d) => d.id === a.id)), 0);
-  const onBarsChange = useIndicators(chartApi, activeIndicators, definitions, symbol, interval);
+    .reduce((sum, a) => sum + (paneHeights[a.itemId] ?? paneHeight(definitions.find((d) => d.id === a.id))), 0);
+  const onBarsChange = useIndicators(chartApi, activeIndicators, definitions, symbol, interval, paneHeights, onPaneResize);
 
   return (
     <div

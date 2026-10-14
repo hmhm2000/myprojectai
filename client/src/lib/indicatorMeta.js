@@ -46,3 +46,10 @@ export function resolveColor(spec, params, opacity = 1) {
   const alpha = (hex.length === 9 ? parseInt(hex.slice(7, 9), 16) / 255 : 1) * opacity;
   return `rgba(${r},${g},${b},${Math.round(alpha * 1000) / 1000})`;
 }
+
+/** Outputs that are drawn (have something to style in the Style section). */
+export const drawnOutputs = (def) => def.outputs.filter((o) => o.plot !== "none");
+
+/** Color params edited in the Style section (an output takes its color from them) - hidden in the settings. */
+export const styleColorParams = (def) =>
+  new Set(drawnOutputs(def).filter((o) => o.color?.startsWith("@")).map((o) => o.color.slice(1)));

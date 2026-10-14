@@ -76,12 +76,13 @@ function ParamInput({ def, param, value, onChange, intervals, idPrefix }) {
 
 /**
  * Settings of an indicator, built from its definition: numbers, source, on/off, colors and timeframes,
- * grouped like the original Pine inputs (one collapsible section per group).
+ * grouped like the original Pine inputs (one collapsible section per group). `hidden`: names not shown.
  */
-export default function ParamFields({ def, params, onChange, idPrefix = "ind" }) {
+export default function ParamFields({ def, params, onChange, idPrefix = "ind", hidden = null }) {
   const [intervals] = useChartIntervals();
+  const shown = hidden ? def.params.filter((p) => !hidden.has(p.name)) : def.params;   // e.g. colors in the Style section
   const groups = [];
-  for (const param of def.params) {
+  for (const param of shown) {
     const group = groups.find((g) => g.name === param.group);
     if (group) group.params.push(param);
     else groups.push({ name: param.group, params: [param] });
@@ -94,7 +95,7 @@ export default function ParamFields({ def, params, onChange, idPrefix = "ind" })
   );
 
   if (groups.length === 1 && !groups[0].name) {
-    return <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{def.params.map(field)}</div>;
+    return <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{shown.map(field)}</div>;
   }
   return (
     <div className="space-y-2">

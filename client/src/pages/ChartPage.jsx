@@ -217,6 +217,11 @@ export default function ChartPage() {
     s, (showTrades ? list : []).filter((e) => e.showOnChart).map(({ id, side, time, price }) => ({ id, side, time, price })),
   ])), [eventsBy, showTrades]);
   const onMarkerClick = useCallback((hits) => setSelected(hits.map((m) => m.id)), []);
+  // a dragged pane border: the new height is kept for that indicator (every interval, every visit)
+  const onPaneResize = useCallback((id, px) => {
+    setSavedIndicators((list) => list.map((i) => (i.id === id ? { ...i, pane_height: px } : i)));
+    chartIndicatorsApi.update(id, { pane_height: px }).catch(() => {});
+  }, []);
 
   const allEvents = Object.values(eventsBy).flat();
   const selectedEvents = allEvents.filter((e) => selected.includes(e.id));
@@ -266,6 +271,7 @@ export default function ChartPage() {
               showNames={showNames}
               onActivate={activate}
               onMarkerClick={onMarkerClick}
+              onPaneResize={onPaneResize}
             />
           ))}
         </div>

@@ -43,6 +43,21 @@ export default {
     namesHint: "Pokaż nazwy wskaźników na wykresie (po prawej, przy osi ceny)",
     activeHint: "Aktywne okno: {{symbol}} · {{interval}} - kliknij inne okno, aby je wybrać. Coin, interwał, lista i wskaźniki dotyczą aktywnego okna.",
   },
+  // Styl wskaźnika (jak zakładka „Styl” w TradingView).
+  style: {
+    title: "Styl",
+    color: "Kolor",
+    opacity: "Krycie (%)",
+    width: "Grubość",
+    lineStyle: "Rodzaj linii",
+    lineStyles: { solid: "Ciągła", dashed: "Kreskowana", dotted: "Kropkowana", large_dashed: "Długie kreski", sparse_dotted: "Rzadkie kropki" },
+    palette: "auto",
+    fill: "Wypełnienie: {{a}} – {{b}}",
+    paletteHint: "Kolory zależą od wartości (ustawiane w kolorach wskaźnika)",
+    paneHeight: "Wysokość panelu (px)",
+    paneHeightHint: "Albo przeciągnij granicę panelu na wykresie - wysokość zostaje na każdym interwale.",
+    paneHeightAuto: "domyślna ({{px}})",
+  },
   // Linijka: Shift + klik na wykresie.
   ruler: {
     bars: { one: "{{count}} świeca", few: "{{count}} świece", many: "{{count}} świec", other: "{{count}} świec" },

@@ -1,4 +1,4 @@
-import { BaselineSeries, HistogramSeries, LineSeries, LineType, createSeriesMarkers } from "lightweight-charts";
+import { BaselineSeries, HistogramSeries, LineSeries, LineStyle, LineType, createSeriesMarkers } from "lightweight-charts";
 import { resolveColor } from "../../lib/indicatorMeta";
 import { BackgroundSeries, BandSeries } from "./bandSeries";
 
@@ -16,9 +16,37 @@ export const paneHeight = (def) => (def?.pane === "overlay" ? 0 : def?.outputs.l
 /** Value label on the axis: the saved choice, by default on for the price pane and off for own panes. */
 export const axisValueOf = (item, def) => item.axis_value ?? def?.pane === "overlay";
 
+const LINE_STYLES = { solid: LineStyle.Solid, dotted: LineStyle.Dotted, dashed: LineStyle.Dashed,
+  large_dashed: LineStyle.LargeDashed, sparse_dotted: LineStyle.SparseDotted };
+
+/**
+ * The definition with the user's own style of its outputs applied (saved per chart indicator, see the
+ * Style section): hidden outputs are not drawn; color, opacity, thickness and line style replace the defaults.
+ */
+export function styledDef(def, styles) {
+  if (!def || !styles || !Object.keys(styles).length) return def;
+  return {
+    ...def,
+    outputs: def.outputs.map((o) => {
+      const s = styles[o.name];
+      if (!s) return o;
+      const out = { ...o };
+      if (s.visible === false) out.hidden = true;
+      if (s.color) out.color = s.color;
+      if (s.opacity !== undefined && s.opacity !== null) out.opacity = s.opacity / 100;
+      if (s.width) {
+        if (o.plot === "points") out.radius = s.width + 1;
+        else out.width = s.width;
+      }
+      if (s.line_style) out.line_style = s.line_style;
+      return out;
+    }),
+  };
+}
+
 /** Color of the indicator's name on the chart: its first drawn line (the "Nazwy" labels). */
 export const labelColor = (def, params) => {
-  const output = def.outputs.find((o) => !["none", "barcolor", "background"].includes(o.plot) && resolveColor(o.color, params));
+  const output = def.outputs.find((o) => !o.hidden && !["none", "barcolor", "background", "band"].includes(o.plot) && resolveColor(o.color, params));
   return output ? resolveColor(output.color, params) : FALLBACK;
 };
 
@@ -31,8 +59,9 @@ export function createOutputSeries(chart, def, params, paneIndex, axisValue = tr
   const result = {};
   for (const output of def.outputs) {
     const color = colorOf(output, params);
+    if (output.hidden) continue;      // switched off in the Style section
     const base = {
-      color, lineWidth: output.width ?? 1, priceLineVisible: false,
+      color, lineWidth: output.width ?? 1, lineStyle: LINE_STYLES[output.line_style] ?? LineStyle.Solid, priceLineVisible: false,
       lastValueVisible: axisValue && output.alert !== false && VALUE_LABEL.has(output.plot), crosshairMarkerVisible: false,
     };
     let series;

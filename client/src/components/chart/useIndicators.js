@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef } from "react";
 import { indicatorsApi } from "../../api/endpoints";
-import { PRICE_PANE_SHARE, createOutputSeries, drawOutputs, paneHeight, removeOutputSeries } from "./indicatorSeries";
+import { PRICE_PANE_SHARE, createOutputSeries, drawOutputs, paneHeight, removeOutputSeries, styledDef } from "./indicatorSeries";
 
 const TAIL_STEPS = 5; // on refresh only the newest candles are recomputed
+const MIN_PANE = 20;          // px - the smallest pane height that is saved after dragging a pane border
+const NO_HEIGHTS = {};
 const REMEMBERED_CHARTS = 12; // (symbol, interval) pairs whose indicator values stay in memory
 
 // Remembered values cut to the chart's candles (a new chart starts with the newest ones only - values
@@ -30,7 +32,10 @@ function remembered(symbol, interval) {
 /**
  * Draws backend-computed indicators on a CandleChart.
  * - `api` comes from CandleChart's onReady (a new chart for every symbol/interval),
- * - `active`: [{ uid, id, params, interval, axisValue }] (interval = own timeframe or null), `definitions`: GET /api/indicators,
+ * - `active`: [{ uid, itemId, id, params, interval, axisValue, styles }] (interval = own timeframe or null,
+ *   styles = own look of the outputs), `definitions`: GET /api/indicators,
+ * - `paneHeights`: { itemId: px } saved heights of the indicators' own panes (the rest: their default);
+ *   when the user drags a pane border, `onPaneResize(itemId, px)` is called for the panes that changed,
  * - overlays are drawn on the price pane; other indicators get their own native pane below it with
  *   their preferred height; when they do not fit, they shrink together and the price pane keeps at
  *   least half of the chart (the whole chart stays in view; pane borders can be dragged),
@@ -39,9 +44,14 @@ function remembered(symbol, interval) {
  * editing, hiding or showing one indicator does not download the others again, and coming back to an
  * interval draws at once - only the newest candles (TAIL_STEPS) and any older history are fetched.
  */
-export function useIndicators(api, active, definitions, symbol, interval) {
+export function useIndicators(api, active, definitions, symbol, interval, paneHeights = NO_HEIGHTS, onPaneResize = null) {
   const layers = useRef([]); // [{ uid, def, params, series: {output: { series, markers }}, values: Map<output, Map<unix, value>> }]
   const range = useRef(null); // { first, last } of the data already fetched
+  const heightsRef = useRef(paneHeights);
+  const resizeRef = useRef(onPaneResize);
+  const relayout = useRef(null);
+  heightsRef.current = paneHeights;
+  resizeRef.current = onPaneResize;
 
   const draw = useCallback((layer) => {
     if (api) drawOutputs(api, layer);
@@ -75,15 +85,18 @@ export function useIndicators(api, active, definitions, symbol, interval) {
     const saved = remembered(symbol, interval);
 
     let pane = 0;
-    const heights = [0];  // px of every indicator pane (index 0 = price pane, sized from what is left)
+    const defaults = [0];   // default px of every indicator pane (index 0 = price pane, sized from what is left)
+    const paneItems = [null];   // chart indicator id of every pane
     layers.current = active
-      .map(({ uid, id, params, interval: ownInterval, axisValue }) => {
-        const def = definitions.find((d) => d.id === id);
-        if (!def) return null;
+      .map(({ uid, itemId, id, params, interval: ownInterval, axisValue, styles }) => {
+        const found = definitions.find((d) => d.id === id);
+        if (!found) return null;
+        const def = styledDef(found, styles);
         const paneIndex = def.pane === "overlay" ? 0 : ++pane;
         if (paneIndex) {
           if (paneIndex >= api.chart.panes().length) api.chart.addPane();   // native v5 pane below the price
-          heights[paneIndex] = paneHeight(def);
+          defaults[paneIndex] = paneHeight(def);
+          paneItems[paneIndex] = itemId;
         }
         const series = createOutputSeries(api.chart, def, params, paneIndex, axisValue);
         const firstSeries = Object.values(series).find((s) => s.series)?.series;
@@ -94,17 +107,41 @@ export function useIndicators(api, active, definitions, symbol, interval) {
       })
       .filter(Boolean);
 
-    // Pane sizes - also after every resize of the chart.
+    // Pane sizes (saved heights, else the defaults) - also after every resize of the chart.
+    let scale = 1;
+    let measured = [];    // real px of the panes after the last layout - a different height = a dragged border
+    let frame = 0;
+    const measure = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (!api.removed) measured = api.chart.panes().map((p) => p.getHeight());
+      });
+    };
     const layout = () => {
+      if (api.removed) return;
+      const heights = defaults.map((h, i) => (i ? heightsRef.current[paneItems[i]] ?? h : 0));
       const total = Math.max(api.container.clientHeight - 30, 100);   // minus the time axis
       const wanted = heights.slice(1).reduce((sum, h) => sum + h, 0);
       const price = Math.max(total - wanted, total * PRICE_PANE_SHARE);
-      const scale = wanted > 0 ? Math.min(1, (total - price) / wanted) : 1;
+      scale = wanted > 0 ? Math.min(1, (total - price) / wanted) : 1;
       api.chart.panes().forEach((p, i) => p.setStretchFactor(i === 0 ? price : (heights[i] ?? 150) * scale));
+      measure();
     };
     layout();
+    relayout.current = layout;
     const resize = new ResizeObserver(layout);
     resize.observe(api.container);
+    // a pane border dragged with the mouse: remember the new heights of the indicator panes
+    const afterPointer = () => requestAnimationFrame(() => {
+      if (api.removed || !measured.length) return;
+      const now = api.chart.panes().map((p) => p.getHeight());
+      now.forEach((px, i) => {
+        if (i === 0 || !paneItems[i] || Math.abs(px - (measured[i] ?? px)) <= 4) return;
+        resizeRef.current?.(paneItems[i], Math.max(MIN_PANE, Math.round(px / scale)));
+      });
+      measured = now;
+    });
+    window.addEventListener("pointerup", afterPointer);
     const tailStart = bars[Math.max(0, bars.length - TAIL_STEPS)].unix;
     layers.current.forEach((layer) => {
       if (layer.first === null) {
@@ -124,6 +161,9 @@ export function useIndicators(api, active, definitions, symbol, interval) {
       if (cleaned) return;
       cleaned = true;
       resize.disconnect();
+      window.removeEventListener("pointerup", afterPointer);
+      cancelAnimationFrame(frame);
+      relayout.current = null;
       for (const layer of layers.current) {
         saved.set(layer.uid, { values: layer.values, first: layer.first, last: layer.last });
         if (!api.removed) removeOutputSeries(api, layer.series);
@@ -137,6 +177,11 @@ export function useIndicators(api, active, definitions, symbol, interval) {
       cleanup();
     };
   }, [api, active, definitions, symbol, interval, fetchInto, draw]);
+
+  // saved pane heights changed (dragged border saved, or set in the settings): only the layout, no new series
+  useEffect(() => {
+    relayout.current?.();
+  }, [paneHeights]);
 
   // Called by CandleChart whenever the loaded candle range changes.
   return useCallback(({ first, last }) => {
