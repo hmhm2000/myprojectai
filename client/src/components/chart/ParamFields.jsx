@@ -1,26 +1,18 @@
 import { t } from "../../i18n";
+import ColorPicker from "../ColorPicker";
 import { SOURCES, groupLabel, optionLabel, paramLabel } from "../../lib/indicatorMeta";
 import { intervalLabel, intervalOptions } from "../../lib/intervals";
 import { useChartIntervals } from "../../lib/useChartIntervals";
 
-/** Color parameter: color picker + opacity (stored as "#rrggbbaa", like Pine color.new(c, transp)). */
-function ColorInput({ id, value, onChange }) {
+/** Color parameter: color + opacity in one picker (stored as "#rrggbbaa", like Pine color.new(c, transp)). */
+function ColorInput({ value, onChange }) {
   const rgb = value.slice(0, 7);
   const alpha = value.length === 9 ? parseInt(value.slice(7, 9), 16) : 255;
-  const opacity = Math.round((alpha / 255) * 100);
   const set = (nextRgb, nextOpacity) => {
     const a = Math.round((nextOpacity / 100) * 255);
     onChange(a === 255 ? nextRgb : `${nextRgb}${a.toString(16).padStart(2, "0")}`);
   };
-  return (
-    <span className="flex items-center gap-2">
-      <input id={id} type="color" className="h-8 w-10 cursor-pointer rounded border-0 bg-transparent p-0"
-        value={rgb} onChange={(e) => set(e.target.value, opacity)} />
-      <input type="number" min={0} max={100} className="w-16 py-1 text-xs" value={opacity} title={t("chart.indicators.opacity")}
-        onChange={(e) => set(rgb, Math.min(100, Math.max(0, Number(e.target.value) || 0)))} />
-      <span className="text-xs text-zinc-500">%</span>
-    </span>
-  );
+  return <ColorPicker color={rgb} opacity={Math.round((alpha / 255) * 100)} onChange={set} title={t("chart.style.color")} />;
 }
 
 function ParamInput({ def, param, value, onChange, intervals, idPrefix }) {
@@ -41,7 +33,7 @@ function ParamInput({ def, param, value, onChange, intervals, idPrefix }) {
       </select>
     );
   } else if (param.type === "color") {
-    input = <ColorInput id={id} value={value} onChange={onChange} />;
+    input = <div id={id}><ColorInput value={value} onChange={onChange} /></div>;
   } else if (param.type === "select") {
     input = (
       <select id={id} className="w-full" value={value} onChange={(e) => onChange(e.target.value)}>

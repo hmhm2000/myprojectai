@@ -58,6 +58,13 @@ export default {
     paneHeightHint: "Albo przeciągnij granicę panelu na wykresie - wysokość zostaje na każdym interwale.",
     paneHeightAuto: "domyślna ({{px}})",
   },
+  // Wybór koloru (próbki, suwak krycia, pipeta).
+  colors: {
+    more: "Więcej…",
+    eyedropper: "Pipeta",
+    eyedropperHint: "Pobierz kolor z ekranu (okno ustawień zniknie na czas wybierania; Esc - anuluj)",
+    opacity: "Krycie",
+  },
   // Linijka: Shift + klik na wykresie.
   ruler: {
     bars: { one: "{{count}} świeca", few: "{{count}} świece", many: "{{count}} świec", other: "{{count}} świec" },

@@ -1,4 +1,5 @@
 import { t } from "../../i18n";
+import ColorPicker from "../ColorPicker";
 import { drawnOutputs, outputLabel, resolveColor } from "../../lib/indicatorMeta";
 
 const LINE_STYLE_NAMES = ["solid", "dashed", "dotted", "large_dashed", "sparse_dotted"];
@@ -27,10 +28,10 @@ function defaultsOf(output, params) {
 
 /**
  * The Style section (like TradingView's Style tab): for every drawn line / band / histogram - visible,
- * color, opacity, thickness and line style. `styles` = { output: { only the changed fields } }.
+ * color + opacity (one picker: quick colors, slider, eyedropper), thickness and line style. `styles` = { output: { only the changed fields } }.
  * A color that comes from an indicator color setting (Pine input.color) is changed there (`params`).
  */
-/** Name of an output; a fill without its own name: "Wypełnienie: upper 1 – lower 1". */
+/** Name of an output; a fill without its own name is named after the two lines it fills between. */
 function labelOf(def, output) {
   const label = outputLabel(def, output);
   if (output.plot !== "band" || label !== output.name || output.between?.length !== 2) return label;
@@ -44,16 +45,20 @@ export default function StyleFields({ def, params, styles, onStyles, onParams })
   const outputs = [...drawnOutputs(def)].sort((a, b) => BACK.has(a.plot) - BACK.has(b.plot));
   if (!outputs.length) return null;
 
-  const set = (output, field, value) => {
-    if (field === "color" && output.color?.startsWith("@")) {
-      const name = output.color.slice(1);
-      const alpha = String(params[name] ?? "").slice(7, 9);   // keep the setting's own transparency
-      onParams({ ...params, [name]: `${value}${alpha}` });
-      return;
-    }
+  // changes of one output: { field: value } (a value equal to the default = no own style for it)
+  const set = (output, changes) => {
     const own = { ...(styles[output.name] ?? {}) };
-    if (value === defaultsOf(output, params)[field]) delete own[field];
-    else own[field] = value;
+    const base = defaultsOf(output, params);
+    for (const [field, value] of Object.entries(changes)) {
+      if (field === "color" && output.color?.startsWith("@")) {
+        const name = output.color.slice(1);
+        const alpha = String(params[name] ?? "").slice(7, 9);   // keep the setting's own transparency
+        if (value !== base.color) onParams({ ...params, [name]: `${value}${alpha}` });
+        continue;
+      }
+      if (value === base[field]) delete own[field];
+      else own[field] = value;
+    }
     const next = { ...styles };
     if (Object.keys(own).length) next[output.name] = own;
     else delete next[output.name];
@@ -73,31 +78,22 @@ export default function StyleFields({ def, params, styles, onStyles, onParams })
           const colorable = !output.palette?.length;
           const id = `style-${output.name}`;
           return (
-            <div key={output.name} className="grid grid-cols-[minmax(0,1fr)_2.25rem_4.25rem_4.5rem_7.5rem] items-center gap-2">
+            <div key={output.name} className="grid grid-cols-[minmax(0,1fr)_2.25rem_4.5rem_7.5rem] items-center gap-2">
               <label htmlFor={id} className="flex min-w-0 items-center gap-2 text-sm text-zinc-300">
-                <input id={id} type="checkbox" checked={value.visible} onChange={(e) => set(output, "visible", e.target.checked)} />
+                <input id={id} type="checkbox" checked={value.visible} onChange={(e) => set(output, { visible: e.target.checked })} />
                 <span className={`truncate ${value.visible ? "" : "text-zinc-500"}`} title={labelOf(def, output)}>{labelOf(def, output)}</span>
               </label>
-              {colorable ? (
-                <input type="color" className="h-7 w-9 cursor-pointer rounded border-0 bg-transparent p-0" title={t("chart.style.color")}
-                  value={value.color} onChange={(e) => set(output, "color", e.target.value)} />
-              ) : (
-                <span className="text-center text-[11px] text-zinc-500" title={t("chart.style.paletteHint")}>{t("chart.style.palette")}</span>
-              )}
-              <span className="flex items-center gap-1" title={t("chart.style.opacity")}>
-                <input type="number" min={0} max={100} className="w-full px-1.5 py-1 text-xs" value={value.opacity}
-                  onChange={(e) => set(output, "opacity", Math.min(100, Math.max(0, Math.round(Number(e.target.value) || 0))))} />
-                <span className="text-xs text-zinc-500">%</span>
-              </span>
+              <ColorPicker color={colorable ? value.color : null} opacity={value.opacity} title={t("chart.style.color")}
+                onChange={(color, opacity) => set(output, colorable ? { color, opacity } : { opacity })} />
               {WIDTH_PLOTS.has(output.plot) ? (
                 <select className="w-full px-1.5 py-1 text-xs" title={t("chart.style.width")} value={value.width}
-                  onChange={(e) => set(output, "width", Number(e.target.value))}>
+                  onChange={(e) => set(output, { width: Number(e.target.value) })}>
                   {[1, 2, 3, 4].map((w) => <option key={w} value={w}>{w} px</option>)}
                 </select>
               ) : <span />}
               {LINE_STYLE_PLOTS.has(output.plot) ? (
                 <select className="w-full px-1.5 py-1 text-xs" title={t("chart.style.lineStyle")} value={value.line_style}
-                  onChange={(e) => set(output, "line_style", e.target.value)}>
+                  onChange={(e) => set(output, { line_style: e.target.value })}>
                   {LINE_STYLE_NAMES.map((st) => <option key={st} value={st}>{t(`chart.style.lineStyles.${st}`)}</option>)}
                 </select>
               ) : <span />}

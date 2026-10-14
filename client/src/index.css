@@ -127,3 +127,37 @@
     overflow: hidden;
   }
 }
+
+/* Color picker: the opacity slider (track = checkerboard + color gradient) */
+.color-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 10px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0;
+  cursor: pointer;
+}
+.color-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: #fafafa;
+  border: 2px solid #18181b;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4);
+}
+.color-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: #fafafa;
+  border: 2px solid #18181b;
+}
+
+/* Eyedropper open: dialogs and the color panel are hidden, so the color can be taken from the chart */
+.color-picking [role="dialog"],
+.color-picking .color-panel {
+  visibility: hidden;
+}
