@@ -99,6 +99,13 @@ def import_sync(user: User = Depends(get_current_user), db: Session = Depends(ge
     return _status(db, user)
 
 
+@router.post("/api/import/reprocess")
+def import_reprocess(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Go through every file of the folder again, also the imported ones (same upsert - no duplicates)."""
+    _last_sync[user.id] = [r.__dict__ for r in importer.sync_folder(db, user, reprocess=True)]
+    return _status(db, user)
+
+
 def _flagged(db: Session, user: User, data: MissingActionIn):
     if data.kind == "position":
         entry = db.get(Position, int(data.id)) if data.id.isdigit() else None

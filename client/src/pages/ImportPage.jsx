@@ -81,9 +81,15 @@ export default function ImportPage() {
           <h1 className="text-lg font-semibold text-zinc-100">{t("imports.title")}</h1>
           <p className="text-xs text-zinc-500">{t("imports.intro")}</p>
         </div>
-        <button type="button" className="btn-primary" disabled={busy} onClick={() => run(importApi.sync)}>
-          {busy ? t("imports.syncing") : t("imports.sync")}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="btn-ghost" disabled={busy} title={t("imports.reprocessHint")}
+            onClick={() => run(importApi.reprocess)}>
+            {t("imports.reprocess")}
+          </button>
+          <button type="button" className="btn-primary" disabled={busy} onClick={() => run(importApi.sync)}>
+            {busy ? t("imports.syncing") : t("imports.sync")}
+          </button>
+        </div>
       </div>
       <ErrorBanner onClose={() => setError(null)}>{error}</ErrorBanner>
 

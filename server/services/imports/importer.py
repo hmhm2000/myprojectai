@@ -147,24 +147,27 @@ class _Index:
 
 # ------------------------------------------------------------------ public
 
-def sync_folder(db: Session, user: User, folder: Path = None) -> list[FileResult]:
-    """Import every new file of the folder (created if missing). Removing a file deletes nothing."""
+def sync_folder(db: Session, user: User, folder: Path = None, reprocess: bool = False) -> list[FileResult]:
+    """Import every new file of the folder (created if missing). Removing a file deletes nothing.
+    `reprocess` also goes through files imported before (e.g. after a change of the import rules) -
+    the same upsert, so nothing is duplicated and manual fields stay."""
     folder = Path(folder or settings.import_dir)
     folder.mkdir(parents=True, exist_ok=True)
     with _lock:
-        return [import_file(db, user, path) for path in sorted(folder.glob("*.csv"))]
+        return [import_file(db, user, path, reprocess) for path in sorted(folder.glob("*.csv"))]
 
 
-def import_file(db: Session, user: User, path: Path) -> FileResult:
+def import_file(db: Session, user: User, path: Path, reprocess: bool = False) -> FileResult:
     sha = sha256_of(path)
-    if db.query(ImportFile).filter(ImportFile.user_id == user.id, ImportFile.sha256 == sha).first():
+    known = db.query(ImportFile).filter(ImportFile.user_id == user.id, ImportFile.sha256 == sha).first()
+    if known and not reprocess:
         return FileResult(path.name, "already_imported")
     adapter = detect_adapter(path)
     if adapter is None:
         return FileResult(path.name, "unrecognized")
     try:
         parsed = adapter.parse(path)
-        result = _import_parsed(db, user, path.name, sha, parsed, adapter.name)
+        result = _import_parsed(db, user, path.name, sha, parsed, adapter.name, known)
         db.commit()
         logger.info("Imported %s: %s new, %s updated, %s skipped, %s unchanged", path.name, result.rows_new,
                     result.rows_updated, result.rows_skipped, result.rows_unchanged)
@@ -178,18 +181,22 @@ def import_file(db: Session, user: User, path: Path) -> FileResult:
 # ------------------------------------------------------------------ import of one parsed file
 
 def _import_parsed(db: Session, user: User, filename: str, sha: str, parsed: ParsedExport,
-                   exchange_name: Optional[str] = None) -> FileResult:
+                   exchange_name: Optional[str] = None, file_row: Optional[ImportFile] = None) -> FileResult:
     source = parsed.source
     now = utcnow()
     portfolio = import_portfolio(db, user, source, exchange_name)
-    file_row = ImportFile(user_id=user.id, filename=filename, sha256=sha, source=source, imported_at=now,
-                          rows_total=parsed.rows_total)
-    db.add(file_row)
+    if file_row is None:
+        file_row = ImportFile(user_id=user.id, filename=filename, sha256=sha, source=source)
+        db.add(file_row)
+    file_row.imported_at, file_row.rows_total = now, parsed.rows_total
     db.flush()
     result = FileResult(filename, "imported", source, rows_total=parsed.rows_total, rows_skipped=parsed.rows_skipped,
                         warnings=list(parsed.warnings))
     index = _Index(db, user, source)
     sale_defs: dict[str, SaleDef] = {}
+    replaced: set[str] = set()          # keys of earlier entries merged into a new one (single fills)
+    obsolete: list[Position] = []       # purchases merged into another one - removed with the rebuild
+    twins_symbols: set = set()          # coins where a trade typed by hand was merged with the import
     seen: set[str] = set()
     last_order = db.query(func.max(Position.sort_order)).filter(Position.portfolio_id == portfolio.id).scalar() or 0
 
@@ -204,6 +211,12 @@ def _import_parsed(db: Session, user: User, filename: str, sha: str, parsed: Par
         ext = record.external_id
         seen.add(ext)
         existing = index.find(ext)
+        if existing is None:
+            existing = _merge_legacy(index, record, replaced, obsolete)
+        twins = _manual_twins(db, portfolio.id, record) if record.kind in ("buy", "sell") else []
+        if twins:
+            existing = _absorb_manual_twins(db, record, twins, existing, index, result)
+            twins_symbols.add((portfolio.id, record.symbol))
         if existing is None:
             owner = index.fingerprints.get(record.fingerprint)
             if record.fingerprint and owner and owner != ext:
@@ -260,8 +273,10 @@ def _import_parsed(db: Session, user: User, filename: str, sha: str, parsed: Par
     db.flush()
     affected = {(d.portfolio_id, d.symbol) for d in sale_defs.values()}
     affected |= {(p.portfolio_id, p.symbol) for p in index.positions.values() if p.import_file_id == file_row.id}
+    affected |= {(p.portfolio_id, p.symbol) for p in obsolete} | twins_symbols
     for portfolio_id, symbol in sorted(affected):
-        _rebuild_sales(db, user, source, portfolio_id, symbol, sale_defs, result)
+        _rebuild_sales(db, user, source, portfolio_id, symbol, sale_defs, result, replaced,
+                       [p for p in obsolete if (p.portfolio_id, p.symbol) == (portfolio_id, symbol)])
     db.flush()
     _flag_missing(db, user, source, parsed, seen)
     result.warnings += _balance_check(db, user, source, parsed)
@@ -270,6 +285,152 @@ def _import_parsed(db: Session, user: User, filename: str, sha: str, parsed: Par
         setattr(file_row, name, getattr(result, name))
     file_row.warnings = json.dumps(result.warnings)
     return result
+
+
+TWIN_MINUTES = 15                       # manual entries lack seconds (and are often typed a bit later)
+TWIN_TOLERANCE = Decimal("0.005")       # quantity / price may differ by fees or rounding (0.5 %)
+
+
+def _close(a: Decimal, b: Decimal) -> bool:
+    return b != 0 and abs(a - b) / abs(b) <= TWIN_TOLERANCE
+
+
+def _manual_twins(db: Session, portfolio_id: int, record: ImportRecord):
+    """Entries typed by hand INTO the import portfolio for the same trade (same coin and side, time
+    +/- 15 min, almost the same quantity and price). Returns positions (buy) or sale groups (sell)."""
+    when = local_time(record.occurred_at)
+    near = lambda moment: abs((moment - when).total_seconds()) <= TWIN_MINUTES * 60
+    if record.kind == "buy":
+        return [p for p in db.query(Position).filter(Position.portfolio_id == portfolio_id, Position.source == "manual",
+                                                     Position.symbol == record.symbol)
+                if near(p.bought_at) and _close(p.quantity, record.quantity) and _close(p.buy_price, record.price)]
+    if record.kind != "sell":
+        return []
+    groups: dict[str, list[Sale]] = {}
+    for sale in (db.query(Sale).join(Position).filter(Position.portfolio_id == portfolio_id, Sale.source == "manual",
+                                                      Position.symbol == record.symbol)):
+        groups.setdefault(sale.group_id, []).append(sale)
+    return [rows for rows in groups.values()
+            if near(rows[0].sold_at) and _close(sum((r.quantity for r in rows), Decimal(0)), record.quantity)
+            and _close(rows[0].price, record.price)]
+
+
+def _absorb_manual_twins(db: Session, record: ImportRecord, twins: list, existing, index: "_Index",
+                         result: "FileResult"):
+    """A trade typed by hand and then imported: keep ONE entry. Without an imported one yet, the manual
+    entry becomes it (the export values are written by the normal update); otherwise its manual fields
+    go to the imported entry and the manual one is removed. Returns the entry to continue with."""
+    ext = record.external_id
+    result.warnings.append({"code": "manual_merged", "params": {
+        "symbol": record.symbol, "side": record.kind, "quantity": format(record.quantity.normalize(), "f"),
+        "time": local_time(record.occurred_at).strftime("%Y-%m-%d %H:%M:%S")}})
+    if record.kind == "buy":
+        target = existing if existing is not None else twins[0]
+        rest = [t for t in twins if t is not target]
+        everything = [target, *rest]
+        target.entry_reason = _join_text(*(p.entry_reason for p in everything))
+        target.plan = _join_text(*(p.plan for p in everything))
+        target.note = _join_text(*(p.note for p in everything))
+        target.tags = list(dict.fromkeys(tag for p in everything for tag in (p.tags or [])))
+        target.target_price = next((p.target_price for p in everything if p.target_price), None)
+        target.stop_loss = next((p.stop_loss for p in everything if p.stop_loss), None)
+        target.custom_fields = _join_fields(*(p.custom_fields for p in everything))
+        if target.source != record.source:                  # the manual entry becomes the imported one
+            target.source, target.external_id, target.fingerprint = record.source, ext, record.fingerprint
+            target.raw = json.dumps({"values": {"kind": "buy"}, "manual_entry": True})
+            index.positions[ext] = target
+        for twin in rest:
+            for sale in list(twin.sales):                   # sales typed on it now belong to the imported one
+                sale.position_id = target.id
+            db.flush()
+            db.expire(twin, ["sales"])
+            db.delete(twin)
+        return target
+    rows = [row for group in twins for row in group]
+    exit_reason = _join_text(*(g[0].exit_reason for g in twins))
+    note = _join_text(*(g[0].note for g in twins))
+    fields = _join_fields(*(g[0].custom_fields for g in twins))
+    show = any(g[0].show_on_chart for g in twins)
+    if existing is None:                                    # the manual sale becomes the imported one
+        for row in rows:
+            row.source, row.external_id, row.fingerprint = record.source, ext, record.fingerprint
+            row.raw = json.dumps({"values": {"kind": "sell"}, "manual_entry": True})
+            row.exit_reason, row.note, row.custom_fields, row.show_on_chart = exit_reason, note, fields, show
+        index.sales[ext] = rows
+        return rows
+    targets = existing if isinstance(existing, list) else [existing]
+    for target in targets:                                  # keep the typed notes on the imported sale
+        if isinstance(target, Sale):
+            target.exit_reason = _join_text(target.exit_reason, exit_reason)
+        target.note = _join_text(target.note, note)
+        target.custom_fields = _join_fields(target.custom_fields, fields)
+    for row in rows:
+        db.delete(row)
+    return existing
+
+
+def _join_text(*values) -> Optional[str]:
+    parts = []
+    for value in values:
+        if value and value.strip() and value.strip() not in parts:
+            parts.append(value.strip())
+    return "\n".join(parts) or None
+
+
+def _join_fields(*values) -> Optional[str]:
+    merged = {}
+    for value in values:
+        merged.update(_load(value))
+    return json.dumps(merged) if merged else None
+
+
+def _merge_legacy(index: "_Index", record: ImportRecord, replaced: set, obsolete: list):
+    """Entries stored by an earlier import under other keys (single fills of this order): merged into
+    one entry under the new key, keeping everything added by hand. Returns that entry or None."""
+    old = [(key, index.find(key)) for key in record.legacy_ids if key != record.external_id]
+    old = [(key, entry) for key, entry in old if entry is not None]
+    if not old:
+        return None
+    replaced.update(key for key, _ in old)
+    for key, _ in old:
+        index.positions.pop(key, None)
+        index.sales.pop(key, None)
+        index.movements.pop(key, None)
+    ext = record.external_id
+    positions = [e for _, e in old if isinstance(e, Position)]
+    if positions:
+        keep, rest = positions[0], positions[1:]
+        everything = positions
+        keep.entry_reason = _join_text(*(p.entry_reason for p in everything))
+        keep.plan = _join_text(*(p.plan for p in everything))
+        keep.note = _join_text(*(p.note for p in everything))
+        keep.tags = list(dict.fromkeys(tag for p in everything for tag in (p.tags or [])))
+        keep.target_price = next((p.target_price for p in everything if p.target_price), None)
+        keep.stop_loss = next((p.stop_loss for p in everything if p.stop_loss), None)
+        keep.show_on_chart = any(p.show_on_chart for p in everything)
+        keep.custom_fields = _join_fields(*(p.custom_fields for p in everything))
+        keep.external_id, keep.fingerprint = ext, record.fingerprint
+        obsolete.extend(rest)
+        index.positions[ext] = keep
+        return keep
+    groups = [e for _, e in old if isinstance(e, list)]
+    movements = [e for _, e in old if isinstance(e, AccountMovement)]
+    rows = [row for group in groups for row in group]
+    if rows:                                          # the sale is rebuilt: carry the manual fields over
+        first = groups[0]
+        exit_reason = _join_text(*(g[0].exit_reason for g in groups))
+        note = _join_text(*(g[0].note for g in groups), *(m.note for m in movements))
+        fields = _join_fields(*(g[0].custom_fields for g in groups), *(m.custom_fields for m in movements))
+        show = any(g[0].show_on_chart for g in groups)
+        for row in first:
+            row.exit_reason, row.note, row.custom_fields, row.show_on_chart = exit_reason, note, fields, show
+        index.sales[ext] = first
+        return first
+    keep = movements[0]
+    keep.note = _join_text(*(m.note for m in movements))
+    keep.custom_fields = _join_fields(*(m.custom_fields for m in movements))
+    index.movements[ext] = keep
+    return keep
 
 
 def _sale_def(record: ImportRecord, portfolio_id: int, filename: str, file_id: int, imported_at) -> SaleDef:
@@ -317,7 +478,8 @@ def _uncovered_sale_def(movement: AccountMovement) -> SaleDef:
 
 
 def _rebuild_sales(db: Session, user: User, source: str, portfolio_id: int, symbol: str,
-                   changed: dict[str, SaleDef], result: FileResult) -> None:
+                   changed: dict[str, SaleDef], result: FileResult, replaced: set = frozenset(),
+                   obsolete: list = ()) -> None:
     """(Re)assign all sales of this source for one coin of one portfolio to its purchases, FIFO."""
     from api.routes.portfolios import _write_sale_group     # the same code as the manual sale form
     from schemas.portfolio import SaleAllocationIn, SaleIn
@@ -334,14 +496,16 @@ def _rebuild_sales(db: Session, user: User, source: str, portfolio_id: int, symb
     groups: dict[str, list[Sale]] = {}
     for row in rows:
         groups.setdefault(row.external_id, []).append(row)
-    definitions = {ext: _existing_sale_def(group) for ext, group in groups.items()}
-    definitions.update({m.external_id: _uncovered_sale_def(m) for m in uncovered})
+    definitions = {ext: _existing_sale_def(group) for ext, group in groups.items() if ext not in replaced}
+    definitions.update({m.external_id: _uncovered_sale_def(m) for m in uncovered if m.external_id not in replaced})
     definitions.update({ext: d for ext, d in changed.items() if d.portfolio_id == portfolio_id and d.symbol == symbol})
 
     for row in rows:
         db.delete(row)
     for movement in uncovered:
         db.delete(movement)
+    for position in obsolete:                        # single fills merged into another purchase
+        db.delete(position)
     db.flush()
     db.expire_all()
 
@@ -411,35 +575,38 @@ def _flag_missing(db: Session, user: User, source: str, parsed: ParsedExport, se
             entry.missing_in_export = entry.external_id not in seen
 
 
-def source_balances(db: Session, user: User, source: str) -> dict[str, Decimal]:
-    """Coin balances from this source's stored entries (purchases - sales +/- transfers)."""
+def source_balances(db: Session, user: User, source: str, until: Optional[datetime] = None) -> dict[str, Decimal]:
+    """Coin balances from this source's stored entries (purchases - sales +/- transfers), optionally
+    only from entries up to `until` (local time) - e.g. the end of an older export."""
     balances: dict[str, Decimal] = {}
 
-    def add(symbol, amount):
-        balances[symbol] = balances.get(symbol, Decimal(0)) + amount
+    def add(symbol, amount, moment=None):
+        if until is None or moment is None or moment <= until:
+            balances[symbol] = balances.get(symbol, Decimal(0)) + amount
 
     mine = (Portfolio.user_id == user.id, Portfolio.kind == "import", Portfolio.source == source)
     for p in db.query(Position).join(Portfolio).filter(*mine, Position.source == source):
-        add(p.symbol, held_quantity(p))
+        add(p.symbol, held_quantity(p), p.bought_at)
     seen_groups = set()
     for s in db.query(Sale).join(Position).join(Portfolio).filter(*mine, Sale.source == source):
-        add(s.position.symbol, -s.quantity)
+        add(s.position.symbol, -s.quantity, s.sold_at)
         if s.group_id not in seen_groups:
             seen_groups.add(s.group_id)
             unallocated = _load(s.raw).get("unallocated")
             if unallocated:
-                add(s.position.symbol, -Decimal(unallocated))
+                add(s.position.symbol, -Decimal(unallocated), s.sold_at)
     for m in db.query(AccountMovement).filter(AccountMovement.user_id == user.id, AccountMovement.source == source):
         if m.kind == "transfer_in":
-            add(m.symbol, m.quantity)
+            add(m.symbol, m.quantity, m.occurred_at)
         elif m.kind in ("transfer_out", "sell_uncovered"):
-            add(m.symbol, -m.quantity)
+            add(m.symbol, -m.quantity, m.occurred_at)
     return balances
 
 
 def _balance_check(db: Session, user: User, source: str, parsed: ParsedExport) -> list[dict]:
-    """Compare the coin balances with the export's Balance column (after its last row)."""
-    computed = source_balances(db, user, source)
+    """Compare the coin balances with the export's Balance column (after its last row) - counting
+    only entries up to the end of the file's period (a newer file may have added later trades)."""
+    computed = source_balances(db, user, source, local_time(parsed.period[1]) if parsed.period else None)
     out = []
     for coin, expected in sorted(parsed.balances.items()):
         if coin in QUOTES:

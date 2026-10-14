@@ -7,9 +7,11 @@ Fee-USD, Balance-USD, Balance_change-USD. Times are in the time zone from the fi
 
 Spot: every fill is TWO rows with the same Order id - one for the coin (Balance Unit = BTC; Action
 says Buy / Sell, fee in BTC on purchases) and one for the quote currency (Balance Unit = USDC, the
-opposite Action, fee in USDC on sales). Their ids are not consecutive and one order may have several
-fills, so a coin row is paired with the quote row of the same order whose amount = coin amount x
-price. The record's external_id is the id of the coin row.
+opposite Action, fee in USDC on sales). One order may be filled in several parts (e.g. 0.0287 + 0.10772
+TAO in the same second) - all fills of an order become ONE purchase / sale, like the exchange's order
+history: summed quantity and fees, price = average weighted by quantity, time of the first fill. The
+record's external_id is the Order id; the ids of the fills are kept as legacy_ids (earlier versions
+of the import stored every fill separately - those entries are merged on the next import).
 Transfer rows (Transfer in / out) -> transfers; Futures rows -> futures (stored, not part of spot).
 """
 from __future__ import annotations
@@ -25,6 +27,7 @@ from typing import Optional
 from services.imports.adapters.base import ImportRecord, ParsedExport
 
 QUOTES = {"USDT", "USDC", "USD"}
+PRICE_STEP = Decimal("0.0000000001")       # average price of a multi-fill order
 REQUIRED = {"id", "Order id", "Time", "Trade Type", "Symbol", "Action", "Amount", "Filled Price", "Fee",
             "Fee Unit", "Balance Change", "Balance", "Balance Unit"}
 PERIOD = re.compile(r"(\d{4}-\d{2}-\d{2})~(\d{4}-\d{2}-\d{2})")
@@ -107,34 +110,44 @@ class OkxAdapter:
             result.rows_skipped += len(group)
             result.warnings.append({"code": "unsupported_pair", "params": {"symbol": symbol, "order": order_id}})
             return
-        coin_rows = [r for r in group if r["Balance Unit"].strip() == base]
+        coin_rows = sorted((r for r in group if r["Balance Unit"].strip() == base), key=lambda r: (r["Time"], int(r["id"])))
         quote_rows = [r for r in group if r["Balance Unit"].strip() == quote]
+        fills: dict[str, list[list[dict]]] = {}                # side -> fills, each [coin row, quote row?]
         for row in coin_rows:
             price = _dec(row["Filled Price"])
-            amount = _dec(row["Amount"])
-            pair = self._pair(row, quote_rows, amount * price)
+            pair = self._pair(row, quote_rows, _dec(row["Amount"]) * price)
             if pair is not None:
                 quote_rows.remove(pair)
             else:
                 result.warnings.append({"code": "unpaired_row", "params": {"id": row["id"], "symbol": symbol}})
-            legs = [row] + ([pair] if pair else [])
-            fee_coin = sum((-_dec(r["Fee"]) for r in legs if r["Fee Unit"].strip() == base), Decimal(0))
-            fee_quote = sum((-_dec(r["Fee"]) for r in legs if r["Fee Unit"].strip() == quote), Decimal(0))
             side = row["Action"].strip().lower()
             if side not in ("buy", "sell"):
-                result.rows_skipped += len(legs)
+                result.rows_skipped += 1 + (pair is not None)
                 continue
+            fills.setdefault(side, []).append([row] + ([pair] if pair else []))
+        for row in quote_rows:                               # quote rows without a coin row
+            result.rows_skipped += 1
+            result.warnings.append({"code": "unpaired_row", "params": {"id": row["id"], "symbol": symbol}})
+
+        for side, parts in fills.items():                    # one record per order (and side)
+            legs = [leg for part in parts for leg in part]
+            coins = [part[0] for part in parts]
+            amount = sum((_dec(r["Amount"]) for r in coins), Decimal(0))
+            value = sum((_dec(r["Amount"]) * _dec(r["Filled Price"]) for r in coins), Decimal(0))
+            price = (value / amount).quantize(PRICE_STEP) if amount else Decimal(0)
+            fee_coin = sum((-_dec(r["Fee"]) for r in legs if r["Fee Unit"].strip() == base), Decimal(0))
+            fee_quote = sum((-_dec(r["Fee"]) for r in legs if r["Fee Unit"].strip() == quote), Decimal(0))
             if side == "buy" and fee_quote and price:        # purchases keep the fee in the coin
                 fee_coin, fee_quote = fee_coin + fee_quote / price, Decimal(0)
             if side == "sell" and fee_coin:                  # sales keep the fee in the quote currency
                 fee_coin, fee_quote = Decimal(0), fee_quote + fee_coin * price
+            first = coins[0]
+            fingerprint = "|".join((first["Time"].strip(), order_id.strip(), side, str(amount), str(price)))
             result.records.append(ImportRecord(
-                source=self.source, external_id=row["id"].strip(), kind=side, symbol=base, quantity=amount,
-                occurred_at=when(row), price=price, quote=quote, fee_coin=fee_coin, fee_quote=fee_quote,
-                fingerprint=_fingerprint(row), rows=legs, row_count=len(legs)))
-        for row in quote_rows:                               # quote rows without a coin row
-            result.rows_skipped += 1
-            result.warnings.append({"code": "unpaired_row", "params": {"id": row["id"], "symbol": symbol}})
+                source=self.source, external_id=order_id.strip(), kind=side, symbol=base, quantity=amount,
+                occurred_at=when(first), price=price, quote=quote, fee_coin=fee_coin, fee_quote=fee_quote,
+                fingerprint=fingerprint, rows=legs, row_count=len(legs),
+                legacy_ids=tuple(r["id"].strip() for r in coins)))
 
     @staticmethod
     def _pair(row: dict, candidates: list[dict], expected: Decimal) -> Optional[dict]:

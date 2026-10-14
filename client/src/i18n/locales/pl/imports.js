@@ -4,6 +4,8 @@ export default {
   intro: "Pliki CSV z giełdy (na razie OKX) z folderu poniżej. Każda giełda ma własny portfel importowany (np. „OKX”) - import tworzy w nim zwykłe pozycje i sprzedaże, tak jak formularz. Ręczne portfele nie są nigdy zmieniane.",
   sync: "Synchronizuj",
   syncing: "Synchronizowanie…",
+  reprocess: "Przetwórz ponownie wszystkie pliki",
+  reprocessHint: "Przechodzi jeszcze raz przez wszystkie pliki z folderu, także już zaimportowane - bez tworzenia duplikatów; notatki i pola wpisane ręcznie zostają.",
   folder: "Folder",
   portfolioHint: "Portfel giełdy tworzy się sam przy pierwszym imporcie z tej giełdy.",
   openDetails: "Szczegóły transakcji: {{name}} →",
@@ -30,6 +32,7 @@ export default {
     sale_uncovered: "Sprzedaż {{id}}: {{quantity}} {{symbol}} nie ma pokrycia w zakupach z tej giełdy (np. coiny z transferu) - ta część nie jest przypisana do pozycji",
     balance_mismatch: "Saldo {{coin}} różni się od kolumny Balance: eksport {{export}}, z transakcji {{computed}}",
     balance_ok: "Saldo {{coin}} zgodne z eksportem ({{export}})",
+    manual_merged: "Transakcja wpisana ręcznie do portfela importowanego ({{symbol}}, {{quantity}}, {{time}}) to ta sama co w pliku - połączono w jeden wpis (dane z giełdy, notatki zostają)",
   },
   missing: {
     title: "Nieobecne w ostatnim eksporcie",

@@ -89,6 +89,7 @@ export const chartIntervalsApi = {
 export const importApi = {
   status: () => data(api.get("/api/import")),
   sync: () => data(api.post("/api/import/sync")),
+  reprocess: () => data(api.post("/api/import/reprocess")),
   keep: (kind, id) => data(api.post("/api/import/missing/keep", { kind, id: String(id) })),
   remove: (kind, id) => data(api.post("/api/import/missing/delete", { kind, id: String(id) })),
 };
