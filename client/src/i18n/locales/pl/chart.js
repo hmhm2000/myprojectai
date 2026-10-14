@@ -62,6 +62,7 @@ export default {
     remove: "Usuń",
     moveUp: "Przesuń wyżej",
     moveDown: "Przesuń niżej",
+    dragHint: "Złap i przeciągnij, aby zmienić kolejność (i kolejność paneli na wykresie)",
     reset: "Przywróć domyślne",
     axisValue: "Pokaż wartość na osi",
     axisValueHint: "Etykieta z aktualną wartością na osi ceny. Domyślnie włączona dla wskaźników na wykresie ceny, wyłączona dla tych w osobnym panelu.",

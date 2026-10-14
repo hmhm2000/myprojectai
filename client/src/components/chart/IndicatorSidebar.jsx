@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { t } from "../../i18n";
-import { ChevronIcon, EditIcon, EyeIcon, PlusIcon, TrashIcon } from "../icons";
+import { ChevronIcon, EditIcon, EyeIcon, GripIcon, PlusIcon, TrashIcon } from "../icons";
 import IndicatorModal from "./IndicatorModal";
 import { intervalLabel } from "../../lib/intervals";
 import { summaryText as summary } from "../../lib/indicatorMeta";
+import { useLiftSort } from "./useLiftSort";
 
 /**
  * Left-hand panel of the chart: one tile per saved indicator (settings, timeframe, edit / hide / delete)
@@ -21,12 +22,14 @@ export default function IndicatorSidebar({ definitions, items, chartInterval, ap
     onChanged();
   };
 
-  // arrows: swap with the neighbour; the list order = order of the indicator panes on the chart
-  const move = (index, step) => {
-    const ids = items.map((i) => i.id);
-    [ids[index], ids[index + step]] = [ids[index + step], ids[index]];
-    api.reorder(ids).then(onChanged);
-  };
+  // order = order of the indicator panes on the chart: drag a whole tile, or use the arrows
+  const shown = useMemo(
+    () => items.filter((item) => definitions.some((d) => d.id === item.indicator_id)),
+    [items, definitions],
+  );
+  const reorder = useCallback((ids) => api.reorder(ids).catch(() => {}).finally(onChanged), [api, onChanged]);
+  const { order, itemProps, moveTo } = useLiftSort(shown, reorder);
+  const byId = new Map(shown.map((item) => [item.id, item]));
 
   return (
     <aside className="space-y-2">
@@ -39,13 +42,17 @@ export default function IndicatorSidebar({ definitions, items, chartInterval, ap
 
       {items.length === 0 && <p className="text-xs text-zinc-500">{t("chart.indicators.empty")}</p>}
 
-      {items.map((item, index) => {
+      {order.map((id, index) => {
+        const item = byId.get(id);
         const def = definitions.find((d) => d.id === item.indicator_id);
-        if (!def) return null;
         return (
-          <div key={item.id} className={`tile px-3 py-2.5 ${item.visible ? "" : "opacity-50"}`}>
+          <div key={item.id} {...itemProps(item.id)}
+            className={`tile select-none px-3 py-2.5 ${item.visible ? "" : "opacity-50"}`}>
             <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
+              <span className="-ml-1.5 mt-0.5 shrink-0 text-zinc-600" style={{ touchAction: "none" }} title={t("chart.indicators.dragHint")}>
+                <GripIcon size={14} />
+              </span>
+              <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium text-zinc-100">{summary(def, item.params)}</div>
                 <div className="text-[11px] text-zinc-500">
                   {item.interval
@@ -56,11 +63,11 @@ export default function IndicatorSidebar({ definitions, items, chartInterval, ap
               <div className="flex shrink-0 gap-0.5">
                 <div className="flex flex-col">
                   <button type="button" className="btn-icon h-3.5 w-6 disabled:opacity-20" title={t("chart.indicators.moveUp")}
-                    disabled={index === 0} onClick={() => move(index, -1)}>
+                    disabled={index === 0} onClick={() => moveTo(id, index - 1)}>
                     <ChevronIcon size={12} className="rotate-180" />
                   </button>
                   <button type="button" className="btn-icon h-3.5 w-6 disabled:opacity-20" title={t("chart.indicators.moveDown")}
-                    disabled={index === items.length - 1} onClick={() => move(index, 1)}>
+                    disabled={index === order.length - 1} onClick={() => moveTo(id, index + 1)}>
                     <ChevronIcon size={12} />
                   </button>
                 </div>
