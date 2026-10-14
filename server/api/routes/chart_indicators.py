@@ -8,7 +8,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from auth import get_current_user
-from core.errors import NotFound
+from core.errors import BadRequest, NotFound
 from database.db import get_db
 from indicators.base import get_indicator, validate_params
 from models.chart_indicators import ChartIndicator
@@ -85,6 +85,26 @@ def add_chart_indicator(data: ChartIndicatorIn, user: User = Depends(get_current
     db.commit()
     db.refresh(item)
     return _out(item)
+
+
+class ChartIndicatorOrderIn(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=200)   # the indicators of one chart window, top first
+
+
+@router.put("/order", response_model=list[ChartIndicatorOut])
+def reorder_chart_indicators(data: ChartIndicatorOrderIn, user: User = Depends(get_current_user),
+                             db: Session = Depends(get_db)):
+    """New order of indicators (the arrows on the tiles): the list order = order of panes on the chart."""
+    if len(set(data.ids)) != len(data.ids):
+        raise BadRequest("indicators.invalid_order", "Each indicator can appear only once")
+    items = [_get(db, item_id, user) for item_id in data.ids]
+    places = sorted(i.sort_order for i in items)         # the numbers these items already use
+    if len(set(places)) != len(places):                  # equal numbers (older rows): consecutive ones
+        places = [places[0] + n for n in range(len(items))]
+    for place, item in zip(places, items):
+        item.sort_order = place
+    db.commit()
+    return list_chart_indicators(user, db)
 
 
 @router.put("/{item_id}", response_model=ChartIndicatorOut)

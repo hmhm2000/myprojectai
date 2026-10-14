@@ -39,6 +39,8 @@ export default {
     chartRight: "Wykres po prawej",
     windows: "Liczba wykresów",
     count: "Wykresy: {{count}}",
+    names: "Nazwy",
+    namesHint: "Pokaż nazwy wskaźników na wykresie (po prawej, przy osi ceny)",
     activeHint: "Aktywne okno: {{symbol}} · {{interval}} - kliknij inne okno, aby je wybrać. Coin, interwał, lista i wskaźniki dotyczą aktywnego okna.",
   },
   // Wskaźniki na wykresie (liczone na serwerze).
@@ -58,6 +60,8 @@ export default {
     hide: "Ukryj",
     show: "Pokaż",
     remove: "Usuń",
+    moveUp: "Przesuń wyżej",
+    moveDown: "Przesuń niżej",
     reset: "Przywróć domyślne",
     axisValue: "Pokaż wartość na osi",
     axisValueHint: "Etykieta z aktualną wartością na osi ceny. Domyślnie włączona dla wskaźników na wykresie ceny, wyłączona dla tych w osobnym panelu.",

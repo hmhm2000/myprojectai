@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { t } from "../../i18n";
-import { EditIcon, EyeIcon, PlusIcon, TrashIcon } from "../icons";
+import { ChevronIcon, EditIcon, EyeIcon, PlusIcon, TrashIcon } from "../icons";
 import IndicatorModal from "./IndicatorModal";
 import { intervalLabel } from "../../lib/intervals";
 import { summaryText as summary } from "../../lib/indicatorMeta";
@@ -21,6 +21,13 @@ export default function IndicatorSidebar({ definitions, items, chartInterval, ap
     onChanged();
   };
 
+  // arrows: swap with the neighbour; the list order = order of the indicator panes on the chart
+  const move = (index, step) => {
+    const ids = items.map((i) => i.id);
+    [ids[index], ids[index + step]] = [ids[index + step], ids[index]];
+    api.reorder(ids).then(onChanged);
+  };
+
   return (
     <aside className="space-y-2">
       <div className="flex items-center justify-between">
@@ -32,7 +39,7 @@ export default function IndicatorSidebar({ definitions, items, chartInterval, ap
 
       {items.length === 0 && <p className="text-xs text-zinc-500">{t("chart.indicators.empty")}</p>}
 
-      {items.map((item) => {
+      {items.map((item, index) => {
         const def = definitions.find((d) => d.id === item.indicator_id);
         if (!def) return null;
         return (
@@ -47,6 +54,16 @@ export default function IndicatorSidebar({ definitions, items, chartInterval, ap
                 </div>
               </div>
               <div className="flex shrink-0 gap-0.5">
+                <div className="flex flex-col">
+                  <button type="button" className="btn-icon h-3.5 w-6 disabled:opacity-20" title={t("chart.indicators.moveUp")}
+                    disabled={index === 0} onClick={() => move(index, -1)}>
+                    <ChevronIcon size={12} className="rotate-180" />
+                  </button>
+                  <button type="button" className="btn-icon h-3.5 w-6 disabled:opacity-20" title={t("chart.indicators.moveDown")}
+                    disabled={index === items.length - 1} onClick={() => move(index, 1)}>
+                    <ChevronIcon size={12} />
+                  </button>
+                </div>
                 <button type="button" className="btn-icon h-7 w-7" title={t("chart.indicators.edit")} onClick={() => setModal({ item })}>
                   <EditIcon size={14} />
                 </button>

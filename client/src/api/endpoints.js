@@ -76,6 +76,7 @@ export const chartIndicatorsApi = {
   add: (body) => data(api.post("/api/chart-indicators", body)),
   update: (id, body) => data(api.put(`/api/chart-indicators/${id}`, body)),
   reset: (id) => data(api.post(`/api/chart-indicators/${id}/reset`)),
+  reorder: (ids) => data(api.put("/api/chart-indicators/order", { ids })),
   remove: (id) => api.delete(`/api/chart-indicators/${id}`),
 };
 

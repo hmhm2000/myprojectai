@@ -89,3 +89,18 @@ def test_chart_indicator_settings_per_user(client, monkeypatch):
     assert client.get("/api/chart-indicators", headers=other).json() == []
     assert client.delete(f"/api/chart-indicators/{rsi['id']}", headers=other).status_code == 404
     assert client.delete(f"/api/chart-indicators/{rsi['id']}", headers=headers).status_code == 204
+
+
+
+def test_chart_indicators_can_be_reordered(client):
+    headers = login(client)
+    ids = [client.post("/api/chart-indicators", json={"indicator_id": i, "slot": 1}, headers=headers).json()["id"]
+           for i in ("rsi", "macd", "sma")]
+    other = client.post("/api/chart-indicators", json={"indicator_id": "ema", "slot": 0}, headers=headers).json()["id"]
+    listed = client.put("/api/chart-indicators/order", json={"ids": [ids[2], ids[0], ids[1]]}, headers=headers).json()
+    in_window = [i["indicator_id"] for i in listed if i["slot"] == 1]
+    assert in_window == ["sma", "rsi", "macd"]                             # the chart draws them in this order
+    assert [i["indicator_id"] for i in listed if i["slot"] == 0] == ["ema"] and other
+    bad = client.put("/api/chart-indicators/order", json={"ids": [ids[0], ids[0]]}, headers=headers)
+    assert bad.json()["code"] == "indicators.invalid_order"
+    assert client.put("/api/chart-indicators/order", json={"ids": [99999]}, headers=headers).status_code == 404

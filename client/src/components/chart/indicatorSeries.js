@@ -16,6 +16,12 @@ export const paneHeight = (def) => (def?.pane === "overlay" ? 0 : def?.outputs.l
 /** Value label on the axis: the saved choice, by default on for the price pane and off for own panes. */
 export const axisValueOf = (item, def) => item.axis_value ?? def?.pane === "overlay";
 
+/** Color of the indicator's name on the chart: its first drawn line (the "Nazwy" labels). */
+export const labelColor = (def, params) => {
+  const output = def.outputs.find((o) => !["none", "barcolor", "background"].includes(o.plot) && resolveColor(o.color, params));
+  return output ? resolveColor(output.color, params) : FALLBACK;
+};
+
 const colorOf = (output, params) => resolveColor(output.color, params, output.opacity) ?? FALLBACK;
 const paletteOf = (output, params) => (output.palette ?? []).map((c) => resolveColor(c, params, output.opacity));
 

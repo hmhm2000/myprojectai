@@ -51,6 +51,11 @@ export default {
       interval_not_found: "Nie ma takiego interwału na liście: {{interval}}",
       unavailable: "Nie udało się pobrać świec z giełdy",
     },
+    indicators: {
+      not_found: "Wskaźnik nie istnieje",
+      invalid_param: "Nieprawidłowe ustawienia wskaźnika",
+      invalid_order: "Nieprawidłowa kolejność wskaźników",
+    },
     prices: {
       refresh_too_soon: "Odczekaj {{retry_after}} s przed kolejnym odświeżeniem",
     },

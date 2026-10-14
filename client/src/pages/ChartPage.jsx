@@ -17,6 +17,7 @@ import { intervalLabel, parseInterval } from "../lib/intervals";
 const LEGACY_INDICATORS_KEY = "chart:indicators"; // old browser-only list, imported once to the server
 const SHOW_TRADES_KEY = "chart:showTrades";
 const CHART_SIDE_KEY = "chart:side";   // "left" (default) | "right" - where the chart is on wide screens
+const SHOW_NAMES_KEY = "chart:showNames"; // indicator names on the charts (toolbar "Nazwy")
 const LAYOUT_KEY = "chart:layout";      // { count: 1 | 2 | 4, active, slots: [{ symbol, interval }] }
 const LAYOUTS = [1, 2, 4];
 const NO_MARKERS = [];
@@ -155,6 +156,7 @@ export default function ChartPage() {
   const [definitions, setDefinitions] = useState([]);
   const [savedIndicators, setSavedIndicators] = useState([]);
   const [showTrades, setShowTrades] = useState(() => localStorage.getItem(SHOW_TRADES_KEY) !== "false");
+  const [showNames, setShowNames] = useState(() => localStorage.getItem(SHOW_NAMES_KEY) === "true");
   const [chartSide, setChartSide] = useState(() => (localStorage.getItem(CHART_SIDE_KEY) === "right" ? "right" : "left"));
 
   const loadIndicators = useCallback(() => chartIndicatorsApi.list().then(setSavedIndicators).catch(() => {}), []);
@@ -182,6 +184,10 @@ export default function ChartPage() {
   useEffect(() => {
     localStorage.setItem(SHOW_TRADES_KEY, String(showTrades));
   }, [showTrades]);
+
+  useEffect(() => {
+    localStorage.setItem(SHOW_NAMES_KEY, String(showNames));
+  }, [showNames]);
 
   useEffect(() => {
     localStorage.setItem(CHART_SIDE_KEY, chartSide);
@@ -229,7 +235,13 @@ export default function ChartPage() {
             <CoinPicker key={`${active}-${symbol}`} value={symbol} onChange={(s) => s && update({ symbol: s })} />
           </div>
           <IntervalPicker value={interval} onChange={(value) => update({ interval: value })} />
-          <div className="ml-auto flex gap-1" role="group" aria-label={t("chart.layout.windows")}>
+          <button type="button" aria-pressed={showNames} title={t("chart.layout.namesHint")}
+            onClick={() => setShowNames((v) => !v)}
+            className={`ml-auto rounded-lg px-2.5 py-1.5 text-xs font-medium transition ${
+              showNames ? "bg-neon-violet/20 text-zinc-50" : "text-zinc-500 hover:bg-white/5"}`}>
+            {t("chart.layout.names")}
+          </button>
+          <div className="flex gap-1" role="group" aria-label={t("chart.layout.windows")}>
             {LAYOUTS.map((n) => (
               <button key={n} type="button" title={t("chart.layout.count", { count: n })} aria-pressed={count === n}
                 onClick={() => setCount(n)}
@@ -251,6 +263,7 @@ export default function ChartPage() {
               markers={markersBySymbol[slot.symbol] ?? NO_MARKERS}
               active={n === active}
               split={split}
+              showNames={showNames}
               onActivate={activate}
               onMarkerClick={onMarkerClick}
             />
