@@ -104,3 +104,28 @@ def test_chart_indicators_can_be_reordered(client):
     bad = client.put("/api/chart-indicators/order", json={"ids": [ids[0], ids[0]]}, headers=headers)
     assert bad.json()["code"] == "indicators.invalid_order"
     assert client.put("/api/chart-indicators/order", json={"ids": [99999]}, headers=headers).status_code == 404
+
+
+def test_chart_indicator_styles_and_pane_height(client):
+    headers = login(client)
+    item = client.post("/api/chart-indicators", json={"indicator_id": "bb", "styles": {
+        "upper": {"color": "#ff0000", "width": 3, "line_style": "dashed"}}}, headers=headers).json()
+    assert item["styles"] == {"upper": {"color": "#ff0000", "width": 3, "line_style": "dashed"}}
+    assert item["pane_height"] is None
+
+    url = f"/api/chart-indicators/{item['id']}"
+    changed = client.put(url, json={"styles": {"basis": {"visible": False, "opacity": 40}, "lower": {}},
+                                    "pane_height": 60}, headers=headers).json()
+    assert changed["styles"] == {"basis": {"visible": False, "opacity": 40}}    # replaced; empty ones dropped
+    assert changed["pane_height"] == 60
+    assert client.put(url, json={"visible": False}, headers=headers).json()["styles"] == changed["styles"]  # kept
+
+    bad = client.put(url, json={"styles": {"nope": {"width": 2}}}, headers=headers)
+    assert bad.status_code == 400 and bad.json()["code"] == "indicators.invalid_param"
+    assert client.put(url, json={"styles": {"upper": {"color": "red"}}}, headers=headers).status_code == 422
+    assert client.put(url, json={"styles": {"upper": {"width": 9}}}, headers=headers).status_code == 422
+
+    assert client.put(url, json={"pane_height": 0}, headers=headers).json()["pane_height"] is None
+    client.put(url, json={"pane_height": 80, "styles": {"upper": {"width": 2}}}, headers=headers)
+    reset = client.post(f"{url}/reset", headers=headers).json()
+    assert reset["styles"] == {} and reset["pane_height"] is None

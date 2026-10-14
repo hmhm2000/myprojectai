@@ -1,6 +1,6 @@
 """The user's chart indicators with their own settings (saved per user, not globally)."""
 import json
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel, ConfigDict, Field
@@ -18,6 +18,28 @@ from services.intervals import parse
 router = APIRouter(prefix="/api/chart-indicators", tags=["indicators"])
 
 
+class OutputStyle(BaseModel):
+    """Own look of one drawn output; a missing field = the indicator's default."""
+    visible: Optional[bool] = None
+    color: Optional[str] = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
+    opacity: Optional[int] = Field(None, ge=0, le=100)          # %
+    width: Optional[int] = Field(None, ge=1, le=4)              # px (lines)
+    line_style: Optional[Literal["solid", "dotted", "dashed", "large_dashed", "sparse_dotted"]] = None
+
+
+def _check_styles(indicator_id: str, styles: Optional[dict[str, OutputStyle]]) -> Optional[str]:
+    """JSON of the styles that change something (outputs of this indicator only), or None."""
+    if not styles:
+        return None
+    names = {o.name for o in get_indicator(indicator_id).outputs}
+    unknown = set(styles) - names
+    if unknown:
+        raise BadRequest("indicators.invalid_param", f"Unknown outputs: {sorted(unknown)}", param="styles")
+    kept = {name: style.model_dump(exclude_none=True) for name, style in styles.items()}
+    kept = {name: style for name, style in kept.items() if style}
+    return json.dumps(kept) if kept else None
+
+
 class ChartIndicatorIn(BaseModel):
     indicator_id: str
     params: dict = Field(default_factory=dict)
@@ -25,6 +47,7 @@ class ChartIndicatorIn(BaseModel):
     visible: bool = True
     axis_value: Optional[bool] = None    # value label on the price axis; None = default for the indicator
     slot: int = Field(0, ge=0, le=3)     # chart window of a split layout
+    styles: Optional[dict[str, OutputStyle]] = None
 
 
 class ChartIndicatorUpdate(BaseModel):
@@ -33,6 +56,8 @@ class ChartIndicatorUpdate(BaseModel):
     follow_chart: bool = False           # True -> clear the own interval
     visible: Optional[bool] = None
     axis_value: Optional[bool] = None
+    styles: Optional[dict[str, OutputStyle]] = None   # replaces all styles; {} = defaults again
+    pane_height: Optional[int] = Field(None, ge=0, le=2000)   # px; 0 = default height again
 
 
 class ChartIndicatorOut(BaseModel):
@@ -46,12 +71,15 @@ class ChartIndicatorOut(BaseModel):
     axis_value: Optional[bool] = None
     slot: int = 0
     sort_order: int
+    styles: dict = Field(default_factory=dict)
+    pane_height: Optional[int] = None
 
 
 def _out(item: ChartIndicator) -> ChartIndicatorOut:
     return ChartIndicatorOut(id=item.id, indicator_id=item.indicator_id, params=json.loads(item.params),
                              interval=item.interval, visible=item.visible, axis_value=item.axis_value,
-                             slot=item.slot, sort_order=item.sort_order)
+                             slot=item.slot, sort_order=item.sort_order,
+                             styles=json.loads(item.styles) if item.styles else {}, pane_height=item.pane_height)
 
 
 def _check_interval(value: Optional[str]) -> Optional[str]:
@@ -80,7 +108,7 @@ def add_chart_indicator(data: ChartIndicatorIn, user: User = Depends(get_current
     last = db.query(func.max(ChartIndicator.sort_order)).filter(ChartIndicator.user_id == user.id).scalar() or 0
     item = ChartIndicator(user_id=user.id, indicator_id=data.indicator_id, params=json.dumps(params),
                           interval=interval, visible=data.visible, axis_value=data.axis_value, slot=data.slot,
-                          sort_order=last + 1)
+                          styles=_check_styles(data.indicator_id, data.styles), sort_order=last + 1)
     db.add(item)
     db.commit()
     db.refresh(item)
@@ -121,6 +149,10 @@ def update_chart_indicator(item_id: int, data: ChartIndicatorUpdate,
         item.visible = data.visible
     if data.axis_value is not None:
         item.axis_value = data.axis_value
+    if data.styles is not None:
+        item.styles = _check_styles(item.indicator_id, data.styles)
+    if data.pane_height is not None:
+        item.pane_height = data.pane_height or None
     db.commit()
     db.refresh(item)
     return _out(item)
@@ -133,6 +165,8 @@ def reset_chart_indicator(item_id: int, user: User = Depends(get_current_user), 
     item.params = json.dumps(validate_params(get_indicator(item.indicator_id), {}))
     item.interval = None
     item.axis_value = None
+    item.styles = None
+    item.pane_height = None
     db.commit()
     db.refresh(item)
     return _out(item)
