@@ -195,6 +195,7 @@ export default function CandleChart({ symbol, interval, markers = [], onMarkerCl
     const disposers = new Set();
     const api = {
       chart, candles, container, toChartTime, getBars: () => bars, setBarColors, removed: false,
+      symbol, interval,   // what this chart shows (the props may already be newer while it is replaced)
       onDispose: (fn) => {
         disposers.add(fn);
         return () => disposers.delete(fn);
@@ -265,8 +266,14 @@ export default function CandleChart({ symbol, interval, markers = [], onMarkerCl
       }
     })();
 
+    // Older history only when the view reaches the oldest candle because the user scrolled / zoomed - not
+    // right after the initial fitContent, which shows all candles (that would download the history twice)
+    // (panes added by indicators also shift the view a bit) - so only after the user moved the chart.
+    let userMoved = false;
+    const moved = () => { userMoved = true; };
+    for (const name of ["pointerdown", "wheel", "touchstart"]) container.addEventListener(name, moved, { passive: true });
     chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-      if (range && range.from < LOAD_MORE_AT) loadOlder();
+      if (range && userMoved && range.from < LOAD_MORE_AT) loadOlder();
     });
     // legend: the candle under the mouse, the newest one when the mouse is elsewhere
     chart.subscribeCrosshairMove((param) => {
@@ -286,6 +293,7 @@ export default function CandleChart({ symbol, interval, markers = [], onMarkerCl
     return () => {
       disposed = true;
       clearInterval(poll);
+      for (const name of ["pointerdown", "wheel", "touchstart"]) container.removeEventListener(name, moved);
       // indicators take their series off BEFORE the chart is removed - calling the chart after
       // remove() made it re-create panes whose document listeners kept every old chart in memory
       for (const fn of [...disposers]) fn();

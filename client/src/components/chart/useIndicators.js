@@ -3,6 +3,29 @@ import { indicatorsApi } from "../../api/endpoints";
 import { PRICE_PANE_SHARE, createOutputSeries, drawOutputs, paneHeight, removeOutputSeries } from "./indicatorSeries";
 
 const TAIL_STEPS = 5; // on refresh only the newest candles are recomputed
+const REMEMBERED_CHARTS = 12; // (symbol, interval) pairs whose indicator values stay in memory
+
+// Remembered values cut to the chart's candles (a new chart starts with the newest ones only - values
+// further back would stretch the time axis past the candles).
+function restore(known, first) {
+  if (!known || known.first === null || known.last < first) return null;
+  if (known.first >= first) return known;
+  const values = new Map([...known.values].map(([name, byTime]) =>
+    [name, new Map([...byTime].filter(([unix]) => unix >= first))]));
+  return { values, first, last: known.last };
+}
+
+// Fetched values per chart (symbol|interval) -> uid -> { values, first, last }, shared by all chart windows.
+// Switching back to an interval draws its indicators at once and fetches only the newest candles.
+const memory = new Map();
+function remembered(symbol, interval) {
+  const key = `${symbol}|${interval}`;
+  const layers = memory.get(key) ?? new Map();
+  memory.delete(key);
+  memory.set(key, layers);   // most recently used last
+  while (memory.size > REMEMBERED_CHARTS) memory.delete(memory.keys().next().value);
+  return layers;
+}
 
 /**
  * Draws backend-computed indicators on a CandleChart.
@@ -12,13 +35,13 @@ const TAIL_STEPS = 5; // on refresh only the newest candles are recomputed
  *   their preferred height; when they do not fit, they shrink together and the price pane keeps at
  *   least half of the chart (the whole chart stays in view; pane borders can be dragged),
  * - returns `onBarsChange` to pass to CandleChart: fetches only what changed (older history or the tail).
- * Fetched values are kept per indicator (uid) for the current chart, so adding, editing, hiding or
- * showing one indicator does not download the others again.
+ * Fetched values are kept per indicator (uid) and chart (symbol + interval, see `memory`), so adding,
+ * editing, hiding or showing one indicator does not download the others again, and coming back to an
+ * interval draws at once - only the newest candles (TAIL_STEPS) and any older history are fetched.
  */
 export function useIndicators(api, active, definitions, symbol, interval) {
   const layers = useRef([]); // [{ uid, def, params, series: {output: { series, markers }}, values: Map<output, Map<unix, value>> }]
   const range = useRef(null); // { first, last } of the data already fetched
-  const cache = useRef({ api: null, layers: new Map() }); // uid -> { values, first, last } for this chart
 
   const draw = useCallback((layer) => {
     if (api) drawOutputs(api, layer);
@@ -42,14 +65,14 @@ export function useIndicators(api, active, definitions, symbol, interval) {
 
   // (Re)create series when the chart or the list of active indicators changes.
   useEffect(() => {
-    if (!api || !definitions.length) return undefined;
+    // the chart of the previous coin / interval is still on screen for a moment after a switch: leave it
+    if (!api || !definitions.length || api.symbol !== symbol || api.interval !== interval) return undefined;
     const bars = api.getBars();
     if (!bars.length) return undefined;
     const first = bars[0].unix;
     const last = bars[bars.length - 1].unix;
     range.current = { first, last };
-    if (cache.current.api !== api) cache.current = { api, layers: new Map() }; // new chart (symbol/interval)
-    const saved = cache.current.layers;
+    const saved = remembered(symbol, interval);
 
     let pane = 0;
     const heights = [0];  // px of every indicator pane (index 0 = price pane, sized from what is left)
@@ -65,7 +88,7 @@ export function useIndicators(api, active, definitions, symbol, interval) {
         const series = createOutputSeries(api.chart, def, params, paneIndex, axisValue);
         const firstSeries = Object.values(series).find((s) => s.series)?.series;
         def.levels.forEach((price) => firstSeries?.createPriceLine({ price, color: "rgba(161,161,170,0.4)", lineStyle: 2, lineWidth: 1, axisLabelVisible: false }));
-        const known = saved.get(uid);
+        const known = restore(saved.get(uid), first);
         return { uid, id, def, params, interval: ownInterval ?? null, series, values: known?.values ?? new Map(),
           first: known?.first ?? null, last: known?.last ?? null };
       })
@@ -113,12 +136,12 @@ export function useIndicators(api, active, definitions, symbol, interval) {
       unregister?.();
       cleanup();
     };
-  }, [api, active, definitions, fetchInto, draw]);
+  }, [api, active, definitions, symbol, interval, fetchInto, draw]);
 
   // Called by CandleChart whenever the loaded candle range changes.
   return useCallback(({ first, last }) => {
     const known = range.current;
-    if (!known || !layers.current.length) return;
+    if (!known || !layers.current.length || api?.symbol !== symbol || api?.interval !== interval) return;
     if (first < known.first) {
       // older history was loaded -> fetch only the new (older) part
       layers.current.forEach((layer) => fetchInto(layer, first, known.first - 1).catch(() => {}));
@@ -129,5 +152,5 @@ export function useIndicators(api, active, definitions, symbol, interval) {
       layers.current.forEach((layer) => fetchInto(layer, tailStart, last).catch(() => {}));
     }
     range.current = { first: Math.min(first, known.first), last: Math.max(last, known.last) };
-  }, [api, fetchInto]);
+  }, [api, symbol, interval, fetchInto]);
 }
