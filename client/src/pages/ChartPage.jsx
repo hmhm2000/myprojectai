@@ -11,7 +11,6 @@ import { Pnl } from "../components/ui";
 import { t } from "../i18n";
 import { fmtDateTime, fmtQty, fmtUnitPrice } from "../lib/format";
 import { loadSymbolTrades } from "../lib/symbolTrades";
-import { portfoliosApi } from "../api/endpoints";
 import { EyeIcon } from "../components/icons";
 import { intervalLabel, parseInterval } from "../lib/intervals";
 
@@ -153,7 +152,6 @@ export default function ChartPage() {
 
   const [eventsBy, setEventsBy] = useState({});      // symbol -> trades from the journal
   const [selected, setSelected] = useState([]);
-  const [focusTime, setFocusTime] = useState(null);
   const [definitions, setDefinitions] = useState([]);
   const [savedIndicators, setSavedIndicators] = useState([]);
   const [showTrades, setShowTrades] = useState(() => localStorage.getItem(SHOW_TRADES_KEY) !== "false");
@@ -202,7 +200,6 @@ export default function ChartPage() {
   }, [visibleSymbols]);
   useEffect(() => setSelected([]), [symbol]);
 
-  const events = eventsBy[symbol] ?? [];
   // Stable per-window inputs: a window redraws only when ITS indicators / markers change (new arrays on
   // every render made every window rebuild all its indicator series on each click - very slow with 2-4).
   const indicatorsBySlot = useMemo(
@@ -215,19 +212,6 @@ export default function ChartPage() {
   ])), [eventsBy, showTrades]);
   const onMarkerClick = useCallback((hits) => setSelected(hits.map((m) => m.id)), []);
 
-  const setShown = (event, show) => setEventsBy((all) => ({
-    ...all, [event.symbol]: (all[event.symbol] ?? []).map((e) => (e.id === event.id ? { ...e, showOnChart: show } : e)),
-  }));
-  const toggleOnChart = async (event) => {
-    const show = !event.showOnChart;
-    setShown(event, show);
-    try {
-      if (event.side === "BUY") await portfoliosApi.setPositionOnChart(event.position.id, show);
-      else await portfoliosApi.setSaleOnChart(event.group.group_id, show);
-    } catch {
-      setShown(event, !show);
-    }
-  };
   const allEvents = Object.values(eventsBy).flat();
   const selectedEvents = allEvents.filter((e) => selected.includes(e.id));
 
@@ -267,7 +251,6 @@ export default function ChartPage() {
               markers={markersBySymbol[slot.symbol] ?? NO_MARKERS}
               active={n === active}
               split={split}
-              focusTime={focusTime}
               onActivate={activate}
               onMarkerClick={onMarkerClick}
             />
@@ -303,49 +286,6 @@ export default function ChartPage() {
           </div>
         )}
 
-        <div className="tile p-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
-            {t("chart.trades.title", { symbol })}
-          </h2>
-          {events.length === 0 ? (
-            <p className="mt-2 text-sm text-zinc-500">{t("chart.trades.none")}</p>
-          ) : (
-            <ul className="mt-2 divide-y divide-white/[0.04] text-sm">
-              {[...events].reverse().map((event) => (
-                <li key={event.id} className={`flex items-center gap-2 ${event.showOnChart ? "" : "opacity-50"}`}>
-                  <button
-                    type="button"
-                    className={`btn-icon h-7 w-7 shrink-0 ${event.showOnChart ? "text-neon-green" : ""}`}
-                    title={event.showOnChart ? t("chart.trades.hideOnChart") : t("chart.trades.showOnChart")}
-                    aria-pressed={event.showOnChart}
-                    onClick={() => toggleOnChart(event)}
-                  >
-                    <EyeIcon size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    className={`flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 py-1.5 text-left hover:bg-white/[0.03] ${
-                      selected.includes(event.id) ? "bg-white/[0.05]" : ""
-                    }`}
-                    onClick={() => {
-                      setSelected([event.id]);
-                      setFocusTime(event.time);
-                    }}
-                  >
-                    <span className={`w-10 font-semibold ${event.side === "BUY" ? "text-profit" : "text-loss"}`}>{event.side}</span>
-                    <span className="text-zinc-400">{fmtDateTime(event.time * 1000)}</span>
-                    <span className="num text-zinc-200">{fmtUnitPrice(event.price)}</span>
-                    <span className="num text-zinc-500">{fmtQty(event.quantity)}</span>
-                    <span className="truncate text-xs text-zinc-500">
-                      {event.side === "BUY" ? event.position.entry_reason : event.group.exit_reason}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <p className="mt-2 text-[11px] text-zinc-600">{t("chart.trades.hint")}</p>
-        </div>
       </aside>
     </div>
   );

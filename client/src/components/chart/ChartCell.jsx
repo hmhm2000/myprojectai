@@ -9,7 +9,7 @@ import { useIndicators } from "./useIndicators";
  * Clicking anywhere in it makes it the active window (the toolbar and the side column work on it).
  */
 function ChartCell({ slot, symbol, interval, indicators, definitions, markers, active, split,
-  focusTime, onActivate, onMarkerClick }) {
+  onActivate, onMarkerClick }) {
   const [chartApi, setChartApi] = useState(null);
   // visible saved indicators of this window, in the shape useIndicators expects
   const activeIndicators = useMemo(
@@ -40,7 +40,6 @@ function ChartCell({ slot, symbol, interval, indicators, definitions, markers, a
           symbol={symbol}
           interval={interval}
           markers={markers}
-          focusTime={active ? focusTime : null}
           onMarkerClick={onMarkerClick}
           onReady={setChartApi}
           onBarsChange={onBarsChange}
