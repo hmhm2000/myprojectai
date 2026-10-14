@@ -21,6 +21,12 @@ export default {
     low: "L",
     close: "C",
   },
+  // Pasek z danymi rynku nad wykresem (CoinGecko, bieżące wartości).
+  market: {
+    title: "Dominacja i kapitalizacja całego rynku - {{source}}, odświeżane co 5 minut",
+    cap: "Kapitalizacja",
+    trillions: "{{value}} bln $",
+  },
   // Lista coinów obok wykresu - to listy z „Ulubionych”.
   watchlist: {
     title: "Lista coinów",
@@ -35,6 +41,9 @@ export default {
   layout: {
     chartLeft: "Wykres po lewej",
     chartRight: "Wykres po prawej",
+    windows: "Liczba wykresów",
+    count: "Wykresy: {{count}}",
+    activeHint: "Aktywne okno: {{symbol}} · {{interval}} - kliknij inne okno, aby je wybrać. Coin, interwał, lista i wskaźniki dotyczą aktywnego okna.",
   },
   // Wskaźniki na wykresie (liczone na serwerze).
   indicators: {

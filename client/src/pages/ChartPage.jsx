@@ -1,12 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import CoinPicker from "../components/CoinPicker";
-import CandleChart from "../components/chart/CandleChart";
+import ChartCell from "../components/chart/ChartCell";
 import IndicatorSidebar from "../components/chart/IndicatorSidebar";
 import IntervalPicker from "../components/chart/IntervalPicker";
+import MarketBar from "../components/chart/MarketBar";
 import Watchlist from "../components/chart/Watchlist";
-import { useIndicators } from "../components/chart/useIndicators";
-import { PRICE_PANE_MIN, axisValueOf, paneHeight } from "../components/chart/indicatorSeries";
 import { chartIndicatorsApi, indicatorsApi } from "../api/endpoints";
 import { Pnl } from "../components/ui";
 import { t } from "../i18n";
@@ -14,11 +13,37 @@ import { fmtDateTime, fmtQty, fmtUnitPrice } from "../lib/format";
 import { loadSymbolTrades } from "../lib/symbolTrades";
 import { portfoliosApi } from "../api/endpoints";
 import { EyeIcon } from "../components/icons";
-import { parseInterval } from "../lib/intervals";
+import { intervalLabel, parseInterval } from "../lib/intervals";
 
 const LEGACY_INDICATORS_KEY = "chart:indicators"; // old browser-only list, imported once to the server
 const SHOW_TRADES_KEY = "chart:showTrades";
 const CHART_SIDE_KEY = "chart:side";   // "left" (default) | "right" - where the chart is on wide screens
+const LAYOUT_KEY = "chart:layout";      // { count: 1 | 2 | 4, active, slots: [{ symbol, interval }] }
+const LAYOUTS = [1, 2, 4];
+const DEFAULT_SLOTS = [["BTC", "1h"], ["ETH", "1h"], ["SOL", "1h"], ["BTC", "1d"]]
+  .map(([symbol, interval]) => ({ symbol, interval }));
+
+function readLayout() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LAYOUT_KEY));
+    const slots = DEFAULT_SLOTS.map((d, i) => ({ ...d, ...(saved?.slots?.[i] ?? {}) }));
+    const count = LAYOUTS.includes(saved?.count) ? saved.count : 1;
+    return { count, slots, active: Math.min(Number(saved?.active) || 0, count - 1) };
+  } catch {
+    return { count: 1, slots: DEFAULT_SLOTS, active: 0 };
+  }
+}
+
+/** Icon of a layout: 1, 2 side by side, 2 x 2. */
+function LayoutIcon({ count }) {
+  const cells = { 1: [[0, 0, 14, 10]], 2: [[0, 0, 6.5, 10], [7.5, 0, 6.5, 10]],
+    4: [[0, 0, 6.5, 4.5], [7.5, 0, 6.5, 4.5], [0, 5.5, 6.5, 4.5], [7.5, 5.5, 6.5, 4.5]] }[count];
+  return (
+    <svg width="16" height="12" viewBox="0 0 14 10" aria-hidden="true">
+      {cells.map(([x, y, w, h]) => <rect key={`${x}-${y}`} x={x} y={y} width={w} height={h} rx="1" fill="currentColor" />)}
+    </svg>
+  );
+}
 
 function readLegacy() {
   try {
@@ -93,32 +118,49 @@ function Reason({ label, text }) {
 
 export default function ChartPage() {
   const [params, setParams] = useSearchParams();
-  const symbol = (params.get("symbol") || "BTC").toUpperCase();
-  const interval = parseInterval(params.get("interval")) ?? "1h";
-  const update = (changes) => setParams({ symbol, interval, ...changes }, { replace: true });
+  const [layout, setLayout] = useState(readLayout);
+  const { count, slots, active } = layout;
+  const { symbol, interval } = slots[active];
+  const split = count > 1;
 
-  const [events, setEvents] = useState([]);
+  // a link like /chart?symbol=ETH&interval=4h opens in the active window
+  const urlApplied = useRef(false);
+  useEffect(() => {
+    if (urlApplied.current) return;
+    urlApplied.current = true;
+    const s = params.get("symbol")?.toUpperCase();
+    const i = parseInterval(params.get("interval"));
+    if (s || i) {
+      setLayout((l) => ({ ...l, slots: l.slots.map((slot, n) => (n === l.active ? { symbol: s || slot.symbol, interval: i || slot.interval } : slot)) }));
+    }
+  }, [params]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout));
+    } catch {
+      // not remembered - fine
+    }
+    setParams({ symbol, interval }, { replace: true });
+  }, [layout, symbol, interval, setParams]);
+
+  /** Change the coin / interval of the active window. */
+  const update = (changes) => setLayout((l) => ({
+    ...l, slots: l.slots.map((slot, n) => (n === l.active ? { ...slot, ...changes } : slot)),
+  }));
+  const activate = useCallback((n) => setLayout((l) => (l.active === n ? l : { ...l, active: n })), []);
+  const setCount = (n) => setLayout((l) => ({ ...l, count: n, active: Math.min(l.active, n - 1) }));
+
+  const [eventsBy, setEventsBy] = useState({});      // symbol -> trades from the journal
   const [selected, setSelected] = useState([]);
   const [focusTime, setFocusTime] = useState(null);
-  const [chartApi, setChartApi] = useState(null);
   const [definitions, setDefinitions] = useState([]);
   const [savedIndicators, setSavedIndicators] = useState([]);
   const [showTrades, setShowTrades] = useState(() => localStorage.getItem(SHOW_TRADES_KEY) !== "false");
   const [chartSide, setChartSide] = useState(() => (localStorage.getItem(CHART_SIDE_KEY) === "right" ? "right" : "left"));
-  // Visible saved indicators in the shape useIndicators expects.
-  const activeIndicators = useMemo(
-    () => savedIndicators.filter((i) => i.visible).map((i) => ({
-      uid: `${i.id}-${i.interval}-${JSON.stringify(i.params)}`, id: i.indicator_id, params: i.params, interval: i.interval,
-      axisValue: axisValueOf(i, definitions.find((d) => d.id === i.indicator_id)),
-    })),
-    [savedIndicators, definitions],
-  );
-  // price pane + every indicator pane below it (px) - the chart is never lower than that
-  const chartMinHeight = PRICE_PANE_MIN + 30 + activeIndicators
-    .reduce((sum, a) => sum + paneHeight(definitions.find((d) => d.id === a.id)), 0);
-  const onBarsChange = useIndicators(chartApi, activeIndicators, definitions, symbol, interval);
 
   const loadIndicators = useCallback(() => chartIndicatorsApi.list().then(setSavedIndicators).catch(() => {}), []);
+  // the side column adds indicators to the active window
+  const slotApi = useMemo(() => ({ ...chartIndicatorsApi, add: (body) => chartIndicatorsApi.add({ ...body, slot: active }) }), [active]);
 
   useEffect(() => {
     indicatorsApi.list().then(setDefinitions).catch(() => {});
@@ -146,59 +188,81 @@ export default function ChartPage() {
     localStorage.setItem(CHART_SIDE_KEY, chartSide);
   }, [chartSide]);
 
+  // journal trades of every coin on screen (loaded once per coin)
+  const visibleSymbols = useMemo(() => [...new Set(slots.slice(0, count).map((s) => s.symbol))], [slots, count]);
+  const requested = useRef(new Set());
   useEffect(() => {
-    let cancelled = false;
-    setEvents([]);
-    setSelected([]);
-    loadSymbolTrades(symbol).then((list) => !cancelled && setEvents(list)).catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [symbol]);
+    for (const s of visibleSymbols) {
+      if (requested.current.has(s)) continue;
+      requested.current.add(s);
+      loadSymbolTrades(s).then((list) => setEventsBy((all) => ({ ...all, [s]: list })))
+        .catch(() => requested.current.delete(s));
+    }
+  }, [visibleSymbols]);
+  useEffect(() => setSelected([]), [symbol]);
 
+  const events = eventsBy[symbol] ?? [];
   // Only trades marked "show on chart"; the marker uses the real trade time and price.
-  const markers = useMemo(
-    () => (showTrades ? events : []).filter((e) => e.showOnChart).map(({ id, side, time, price }) => ({ id, side, time, price })),
-    [events, showTrades],
-  );
+  const markersFor = (s) => (showTrades ? eventsBy[s] ?? [] : [])
+    .filter((e) => e.showOnChart).map(({ id, side, time, price }) => ({ id, side, time, price }));
 
+  const setShown = (event, show) => setEventsBy((all) => ({
+    ...all, [event.symbol]: (all[event.symbol] ?? []).map((e) => (e.id === event.id ? { ...e, showOnChart: show } : e)),
+  }));
   const toggleOnChart = async (event) => {
     const show = !event.showOnChart;
-    setEvents((list) => list.map((e) => (e.id === event.id ? { ...e, showOnChart: show } : e)));
+    setShown(event, show);
     try {
       if (event.side === "BUY") await portfoliosApi.setPositionOnChart(event.position.id, show);
       else await portfoliosApi.setSaleOnChart(event.group.group_id, show);
     } catch {
-      setEvents((list) => list.map((e) => (e.id === event.id ? { ...e, showOnChart: !show } : e)));
+      setShown(event, !show);
     }
   };
-  const selectedEvents = events.filter((e) => selected.includes(e.id));
+  const allEvents = Object.values(eventsBy).flat();
+  const selectedEvents = allEvents.filter((e) => selected.includes(e.id));
 
   const right = chartSide === "right";
   return (
-    // Wide screens: chart + side column next to each other, both exactly as high as the window, each
-    // scrolling on its own - the chart stays in view. Phones: one column, chart on top (not sticky).
+    // Wide screens: charts + side column next to each other, both exactly as high as the window, each
+    // scrolling on its own - the charts stay in view. Phones: one column, charts on top (not sticky).
     <div className={`grid gap-3 lg:sticky lg:top-[69px] lg:h-[calc(100vh-81px)] ${
       right ? "lg:grid-cols-[22rem_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,1fr)_22rem]"}`}>
-      {/* the chart column never scrolls: the chart (with all its panes) always fits the window */}
+      {/* the chart column never scrolls: the charts (with all their panes) always fit the window */}
       <section className={`flex min-w-0 flex-col gap-2 lg:h-full lg:min-h-0 lg:overflow-hidden ${right ? "lg:order-2" : ""}`}>
+        <MarketBar />
         <div className="flex flex-wrap items-center gap-3">
           <div className="w-56">
-            <CoinPicker key={symbol} value={symbol} onChange={(s) => s && update({ symbol: s })} />
+            <CoinPicker key={`${active}-${symbol}`} value={symbol} onChange={(s) => s && update({ symbol: s })} />
           </div>
           <IntervalPicker value={interval} onChange={(value) => update({ interval: value })} />
+          <div className="ml-auto flex gap-1" role="group" aria-label={t("chart.layout.windows")}>
+            {LAYOUTS.map((n) => (
+              <button key={n} type="button" title={t("chart.layout.count", { count: n })} aria-pressed={count === n}
+                onClick={() => setCount(n)}
+                className={`rounded-lg px-2 py-1.5 transition ${count === n ? "bg-neon-violet/20 text-zinc-50" : "text-zinc-500 hover:bg-white/5"}`}>
+                <LayoutIcon count={n} />
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="tile min-h-0 p-2 lg:flex-1">
-          <CandleChart
-            symbol={symbol}
-            interval={interval}
-            markers={markers}
-            focusTime={focusTime}
-            onMarkerClick={(hits) => setSelected(hits.map((m) => m.id))}
-            onReady={setChartApi}
-            onBarsChange={onBarsChange}
-            minHeight={chartMinHeight}
-          />
+        <div className={`grid min-h-0 gap-2 lg:flex-1 ${count === 1 ? "" : count === 2 ? "lg:grid-cols-2" : "lg:grid-cols-2 lg:grid-rows-2"}`}>
+          {slots.slice(0, count).map((slot, n) => (
+            <ChartCell
+              key={n}
+              slot={n}
+              symbol={slot.symbol}
+              interval={slot.interval}
+              indicators={savedIndicators.filter((i) => (i.slot ?? 0) === n)}
+              definitions={definitions}
+              markers={markersFor(slot.symbol)}
+              active={n === active}
+              split={split}
+              focusTime={focusTime}
+              onActivate={activate}
+              onMarkerClick={(hits) => setSelected(hits.map((m) => m.id))}
+            />
+          ))}
         </div>
       </section>
 
@@ -213,14 +277,15 @@ export default function ChartPage() {
             {right ? t("chart.layout.chartLeft") : t("chart.layout.chartRight")}
           </button>
         </div>
+        {split && <p className="text-xs text-zinc-500">{t("chart.layout.activeHint", { symbol, interval: intervalLabel(interval) })}</p>}
 
         <div className="tile p-3">
           <Watchlist symbol={symbol} onSelect={(s) => update({ symbol: s })} />
         </div>
 
         <div className="tile p-3">
-          <IndicatorSidebar definitions={definitions} items={savedIndicators} chartInterval={interval}
-            api={chartIndicatorsApi} onChanged={loadIndicators} />
+          <IndicatorSidebar definitions={definitions} items={savedIndicators.filter((i) => (i.slot ?? 0) === active)}
+            chartInterval={interval} api={slotApi} onChanged={loadIndicators} />
         </div>
 
         {selectedEvents.length > 0 && (

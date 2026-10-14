@@ -24,6 +24,7 @@ class ChartIndicatorIn(BaseModel):
     interval: Optional[str] = None       # own timeframe; None = follow the chart interval
     visible: bool = True
     axis_value: Optional[bool] = None    # value label on the price axis; None = default for the indicator
+    slot: int = Field(0, ge=0, le=3)     # chart window of a split layout
 
 
 class ChartIndicatorUpdate(BaseModel):
@@ -43,13 +44,14 @@ class ChartIndicatorOut(BaseModel):
     interval: Optional[str]
     visible: bool
     axis_value: Optional[bool] = None
+    slot: int = 0
     sort_order: int
 
 
 def _out(item: ChartIndicator) -> ChartIndicatorOut:
     return ChartIndicatorOut(id=item.id, indicator_id=item.indicator_id, params=json.loads(item.params),
                              interval=item.interval, visible=item.visible, axis_value=item.axis_value,
-                             sort_order=item.sort_order)
+                             slot=item.slot, sort_order=item.sort_order)
 
 
 def _check_interval(value: Optional[str]) -> Optional[str]:
@@ -77,7 +79,8 @@ def add_chart_indicator(data: ChartIndicatorIn, user: User = Depends(get_current
     interval = _check_interval(data.interval)
     last = db.query(func.max(ChartIndicator.sort_order)).filter(ChartIndicator.user_id == user.id).scalar() or 0
     item = ChartIndicator(user_id=user.id, indicator_id=data.indicator_id, params=json.dumps(params),
-                          interval=interval, visible=data.visible, axis_value=data.axis_value, sort_order=last + 1)
+                          interval=interval, visible=data.visible, axis_value=data.axis_value, slot=data.slot,
+                          sort_order=last + 1)
     db.add(item)
     db.commit()
     db.refresh(item)

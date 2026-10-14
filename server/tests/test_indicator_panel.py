@@ -62,6 +62,10 @@ def test_chart_indicator_settings_per_user(client, monkeypatch):
     follow = client.put(f"/api/chart-indicators/{rsi['id']}", json={"follow_chart": True}, headers=headers).json()
     assert follow["interval"] is None
     assert rsi["axis_value"] is None                                       # default for the indicator
+    second = client.post("/api/chart-indicators", json={"indicator_id": "macd", "slot": 2}, headers=headers).json()
+    assert second["slot"] == 2 and rsi["slot"] == 0                          # chart window of a split layout
+    assert client.post("/api/chart-indicators", json={"indicator_id": "macd", "slot": 4}, headers=headers).status_code == 422
+    client.delete(f"/api/chart-indicators/{second['id']}", headers=headers)
     shown = client.put(f"/api/chart-indicators/{rsi['id']}", json={"axis_value": True}, headers=headers).json()
     assert shown["axis_value"] is True and shown["params"]["length"] == 21  # other settings kept
 

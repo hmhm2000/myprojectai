@@ -105,6 +105,10 @@ export const journalApi = {
   stats: (portfolioId = null) => data(api.get("/api/journal/stats", { params: portfolioId ? { portfolio_id: portfolioId } : {} })),
 };
 
+export const marketApi = {
+  global: () => data(api.get("/api/prices/market")),
+};
+
 export const myCoinsApi = {
   get: () => data(api.get("/api/my-coins")),
 };

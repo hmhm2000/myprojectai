@@ -50,3 +50,11 @@ def force_refresh():
             429, "prices.refresh_too_soon", str(exc),
             headers={"Retry-After": str(exc.retry_after)}, retry_after=exc.retry_after,
         ) from exc
+
+
+@router.get("/market")
+def market_global():
+    """BTC / ETH / USDT dominance and the total market cap (CoinGecko, cached 5 min)."""
+    from services.market import market_service
+
+    return market_service.get()

@@ -16,5 +16,6 @@ class ChartIndicator(Base):
     visible = Column(Boolean, nullable=False, default=True)
     # value label on the price axis; None = default (on for indicators on the price pane, off for own panes)
     axis_value = Column(Boolean, nullable=True)
+    slot = Column(Integer, nullable=False, default=0, server_default="0")   # chart window (0-3) of a split layout
     sort_order = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, nullable=False, default=utcnow)
