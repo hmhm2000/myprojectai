@@ -7,6 +7,7 @@ import { fmtDate, fmtDateTime, fmtPct, fmtUnitPrice, pnlTone } from "../../lib/f
 
 const PAGE = 500;            // candles per request
 const POLL_MS = 30_000;      // refresh of the last candles (the backend caches live candles for 30 s)
+const START_BARS = 120;      // a new chart shows the newest candles in its left half, the right half empty
 const LOAD_MORE_AT = 20;     // load older history when fewer bars than this remain on the left
 // With a price the arrow points exactly at it (BUY from below, SELL from above); without one it sits under/over the bar.
 const MARKER_STYLE = {
@@ -257,7 +258,11 @@ export default function CandleChart({ symbol, interval, markers = [], onMarkerCl
         oldestUnix = data.candles[0]?.time ?? null;
         if (bars.length) candles.applyOptions({ priceFormat: priceFormat(bars[bars.length - 1].close) });
         setAll();
-        chart.timeScale().fitContent();
+        // like TradingView: the newest candle in the middle, free space on the right (scroll / zoom freely)
+        if (bars.length) {
+          const shown = Math.min(START_BARS, bars.length);
+          chart.timeScale().setVisibleLogicalRange({ from: bars.length - shown, to: bars.length - 1 + shown });
+        }
         if (bars.length) setLegend({ bar: bars[bars.length - 1], next: null });
         setState({ loading: false, error: null, source: data.source });
         readyRef.current?.(api);
@@ -267,8 +272,7 @@ export default function CandleChart({ symbol, interval, markers = [], onMarkerCl
     })();
 
     // Older history only when the view reaches the oldest candle because the user scrolled / zoomed - not
-    // right after the initial fitContent, which shows all candles (that would download the history twice)
-    // (panes added by indicators also shift the view a bit) - so only after the user moved the chart.
+    // on its own (panes added by indicators also shift the view a bit) - so only after the user moved it.
     let userMoved = false;
     const moved = () => { userMoved = true; };
     for (const name of ["pointerdown", "wheel", "touchstart"]) container.addEventListener(name, moved, { passive: true });
