@@ -150,3 +150,65 @@ def stoch(src: Sequence[Optional[float]], high: Sequence[Optional[float]], low: 
 def cross(a: Sequence[Optional[float]], b: Sequence[Optional[float]]) -> list[bool]:
     """Pine's cross: crossed in either direction."""
     return [up or down for up, down in zip(crossover(a, b), crossunder(a, b))]
+
+
+def wma(src: Sequence[Optional[float]], length: int) -> Series:
+    """Pine's ta.wma: weights 1..length, the newest candle weighs most."""
+    weights = list(range(1, length + 1))
+    total = sum(weights)
+    out: Series = []
+    for i in range(len(src)):
+        window = _window(src, i, length)
+        out.append(sum(w * v for w, v in zip(weights, window)) / total if window else None)
+    return out
+
+
+def vwma(src: Sequence[Optional[float]], volume: Sequence[float], length: int) -> Series:
+    """Pine's ta.vwma: sma(src * volume) / sma(volume)."""
+    num = sma([None if s is None else s * v for s, v in zip(src, volume)], length)
+    den = sma(volume, length)
+    return [None if n is None or not d else n / d for n, d in zip(num, den)]
+
+
+def _pivot(src, left: int, right: int, better) -> list:
+    """Value of src[right] when it is a pivot (better than `left` candles before and `right` after)."""
+    out = [None] * len(src)
+    for i in range(left + right, len(src)):
+        c = src[i - right]
+        window = src[i - right - left:i + 1]
+        if c is None or None in window:
+            continue
+        before, after = window[:left], window[left + 1:]
+        if all(better(c, v) for v in before) and all(better(c, v) or c == v for v in after):
+            out[i] = c
+    return out
+
+
+def pivothigh(src, left: int, right: int) -> list:
+    """Pine's ta.pivothigh: on candle i the value of a high `right` candles back (else na)."""
+    return _pivot(src, left, right, lambda a, b: a > b)
+
+
+def pivotlow(src, left: int, right: int) -> list:
+    """Pine's ta.pivotlow."""
+    return _pivot(src, left, right, lambda a, b: a < b)
+
+
+def barssince(condition: Sequence) -> list:
+    """Pine's ta.barssince: candles since the condition was last true (na before the first time)."""
+    out, last = [], None
+    for i, cond in enumerate(condition):
+        if truthy(cond):
+            last = i
+        out.append(None if last is None else i - last)
+    return out
+
+
+def valuewhen_nth(condition: Sequence, src: Sequence, occurrence: int) -> list:
+    """Pine's valuewhen(condition, src, occurrence): src at the occurrence-th latest true condition."""
+    out, hits = [], []
+    for cond, value in zip(condition, src):
+        if truthy(cond):
+            hits.append(value)
+        out.append(hits[-1 - occurrence] if len(hits) > occurrence else None)
+    return out

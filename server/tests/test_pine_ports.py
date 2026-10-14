@@ -302,3 +302,66 @@ def test_vmc_reads_other_timeframes_only_when_used():
     assert sorted(requested) == ["1h", "4h"]
     _, requested = run({}, None)                                         # alerts: every output, Sommi included
     assert sorted(requested) == ["12h", "1h", "4h"]
+
+
+@pytest.mark.parametrize("indicator_id,params", [
+    ("golden_cross", {}), ("liquidation", {}),
+    ("rsi_stoch", {"ma_type": "SMA + Bollinger Bands", "calculate_divergence": True}), ("rsi_stoch", {"ma_type": "WMA"}),
+])
+def test_new_ports_do_not_depend_on_history_start(indicator_id, params):
+    full = walk(1500, seed=3)
+    indicator = get_indicator(indicator_id)
+    params = validate_params(indicator, params)
+    part = tail(full, indicator.warmup(params) + 50)
+    a, b = indicator.compute(full, params), indicator.compute(part, params)
+    for name, values in a.items():
+        if ":" in name or values[-1] is None or name.endswith(("_mark", "_label")):
+            continue
+        assert b[name][-1] == pytest.approx(values[-1], rel=1e-3, abs=1e-3), name
+
+
+def test_core_wma_pivots_and_select_param():
+    from indicators.core import barssince, pivothigh, pivotlow, valuewhen_nth, wma
+
+    assert wma([1, 2, 3, 4], 3)[-1] == pytest.approx((2 * 1 + 3 * 2 + 4 * 3) / 6)
+    src = [1, 2, 5, 2, 1, 0, 3, 1]
+    assert pivothigh(src, 2, 2)[4] == 5 and pivotlow(src, 2, 2)[7] == 0
+    assert barssince([0, 1, 0, 0]) == [None, 0, 1, 2]
+    assert valuewhen_nth([1, 0, 1, 1], [10, 20, 30, 40], 1) == [None, None, 10, 30]
+    stoch = get_indicator("rsi_stoch")
+    assert validate_params(stoch, {"ma_type": "EMA"})["ma_type"] == "EMA"
+    with pytest.raises(AppError):
+        validate_params(stoch, {"ma_type": "HMA"})
+
+
+def test_golden_cross_and_liquidation_marks():
+    data = walk(800, seed=11)
+    gc = get_indicator("golden_cross")
+    out = gc.compute(data, validate_params(gc, {}))
+    for i, mark in enumerate(out["cross_mark"]):
+        crossed = out["cross_up"][i] or out["cross_down"][i]
+        assert (mark is not None) == bool(crossed) and (mark is None or mark == out["fast"][i])
+    assert any(out["cross_up"]) and any(out["cross_down"])
+
+    liq = get_indicator("liquidation")
+    out = liq.compute(data, validate_params(liq, {}))
+    dist = out["distance"]
+    for i in range(200, 800):
+        window = dist[i - 88:i + 1]
+        assert bool(out["short_liq"][i]) == (dist[i] > 0 and dist[i] == max(window))
+        assert bool(out["long_liq"][i]) == (dist[i] < 0 and dist[i] == min(window))
+        assert out["distance:color"][i] == (1 if dist[i] > 0 else 0)
+
+
+def test_bull_market_support_band_uses_weekly_candles():
+    hourly = walk(24 * 7 * 40, seed=5)
+    now = hourly.time[-1] + 1800
+    service = Hourly(hourly)
+    base = OHLCV.from_candles(service.get_candles("BTC", "1d", 0, now).candles, DataContext(service, "BTC", "1d", now))
+    bmsb = get_indicator("bmsb")
+    out = bmsb.compute(base, validate_params(bmsb, {}))
+    weekly = service.get_candles("BTC", "1w", 0, now).candles
+    closes = [float(c.close) for c in weekly]
+    # the newest daily candle shows the forming week: SMA 20 of the weekly closes
+    assert out["sma"][-1] == pytest.approx(sum(closes[-20:]) / 20)
+    assert len(set(out["sma"][-14:-7])) <= 2                              # constant within a week

@@ -93,12 +93,13 @@ class OHLCV:
 class Param:
     name: str
     type: str                      # "int" | "float" | "source" | "bool" | "color" (#rrggbb[aa]) | "timeframe" (e.g. "4h")
-                                   # | "symbol" (a coin, e.g. "ETH")
+                                   # | "symbol" (a coin, e.g. "ETH") | "select" (one of `options`)
     default: Any
     min: Optional[float] = None
     max: Optional[float] = None
     label: str = ""                # original title (Pine input title); the UI translates it when it can
     group: str = ""                # section in the settings (Pine input group)
+    options: tuple = ()            # "select": the allowed values (Pine input.string options)
 
 
 @dataclass(frozen=True)
@@ -206,6 +207,10 @@ def _coerce(param: Param, value: Any) -> Any:
         if not isinstance(value, str) or not COLOR.match(value):
             raise ValueError
         return value.lower()
+    if param.type == "select":
+        if value not in param.options:
+            raise ValueError
+        return value
     if param.type == "symbol":
         value = str(value).strip().upper()
         if not re.match(r"^[A-Z0-9]{1,20}$", value):

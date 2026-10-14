@@ -24,6 +24,7 @@ class ParamOut(BaseModel):
     max: Optional[float] = None
     label: str = ""
     group: str = ""
+    options: list[str] = []
 
 
 class OutputOut(BaseModel):

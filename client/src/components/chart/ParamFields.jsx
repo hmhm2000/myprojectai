@@ -1,5 +1,5 @@
 import { t } from "../../i18n";
-import { SOURCES, groupLabel, paramLabel } from "../../lib/indicatorMeta";
+import { SOURCES, groupLabel, optionLabel, paramLabel } from "../../lib/indicatorMeta";
 import { intervalLabel, intervalOptions } from "../../lib/intervals";
 import { useChartIntervals } from "../../lib/useChartIntervals";
 
@@ -42,6 +42,12 @@ function ParamInput({ def, param, value, onChange, intervals, idPrefix }) {
     );
   } else if (param.type === "color") {
     input = <ColorInput id={id} value={value} onChange={onChange} />;
+  } else if (param.type === "select") {
+    input = (
+      <select id={id} className="w-full" value={value} onChange={(e) => onChange(e.target.value)}>
+        {param.options.map((o) => <option key={o} value={o}>{optionLabel(o)}</option>)}
+      </select>
+    );
   } else if (param.type === "symbol") {
     input = (
       <input id={id} className="w-full uppercase" value={value} maxLength={20} required pattern="[A-Za-z0-9]+"

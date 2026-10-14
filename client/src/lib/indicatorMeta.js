@@ -17,6 +17,9 @@ export const paramLabel = (def, param) =>
 
 export const groupLabel = (group) => translated([`chart.paramGroups.${group}`], group);
 
+/** A choice of a "select" parameter (Pine input options), translated when a translation exists. */
+export const optionLabel = (option) => translated([`chart.paramOptions.${option.replace(/[^A-Za-z0-9]/g, "_")}`], option);
+
 export const outputLabel = (def, output) =>
   translated([`chart.indicatorOutputs.${def.id}.${output.name}`, `alerts.outputs.${output.name}`], output.label || output.name);
 

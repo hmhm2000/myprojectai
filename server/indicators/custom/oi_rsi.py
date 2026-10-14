@@ -14,16 +14,9 @@ Differences:
 """
 from indicators.base import Indicator, Output, Param, register
 from indicators.builtin import rsi_series
-from indicators.core import sma
+from indicators.core import vwma
 
 GROUP, COLORS = "settings", "colors"
-
-
-def vwma(src, volume, length):
-    """ta.vwma: sma(src * volume) / sma(volume)."""
-    num = sma([None if s is None else s * v for s, v in zip(src, volume)], length)
-    den = sma(volume, length)
-    return [None if n is None or not dv else n / dv for n, dv in zip(num, den)]
 
 
 def compute(d, p):
