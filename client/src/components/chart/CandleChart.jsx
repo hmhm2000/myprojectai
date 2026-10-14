@@ -4,6 +4,7 @@ import { errorMessage } from "../../api/client";
 import { candlesApi } from "../../api/endpoints";
 import { t } from "../../i18n";
 import { fmtDate, fmtDateTime, fmtPct, fmtUnitPrice, pnlTone } from "../../lib/format";
+import ChartRuler from "./ChartRuler";
 
 const PAGE = 500;            // candles per request
 const POLL_MS = 30_000;      // refresh of the last candles (the backend caches live candles for 30 s)
@@ -95,6 +96,7 @@ export default function CandleChart({ symbol, interval, markers = [], onMarkerCl
   const containerRef = useRef(null);
   const [state, setState] = useState({ loading: true, error: null, source: null });
   const [legend, setLegend] = useState(null);     // { bar, next } shown in the top-left corner
+  const [rulerApi, setRulerApi] = useState(null);  // the loaded chart, for the Shift + click ruler
   // Latest props for the chart callbacks (the chart itself is rebuilt only for a new symbol/interval).
   const markersRef = useRef(markers);
   const clickRef = useRef(onMarkerClick);
@@ -266,6 +268,7 @@ export default function CandleChart({ symbol, interval, markers = [], onMarkerCl
         if (bars.length) setLegend({ bar: bars[bars.length - 1], next: null });
         setState({ loading: false, error: null, source: data.source });
         readyRef.current?.(api);
+        setRulerApi(api);
       } catch (err) {
         if (!disposed) setState({ loading: false, error: errorMessage(err), source: null });
       }
@@ -309,6 +312,7 @@ export default function CandleChart({ symbol, interval, markers = [], onMarkerCl
   return (
     <div className="relative flex h-full flex-col">
       <Legend legend={legend} interval={interval} />
+      <ChartRuler api={rulerApi} />
       {/* phones: at least the price + indicator panes; wide screens: exactly the space it gets */}
       <div ref={containerRef} className="w-full flex-1 min-h-[var(--chart-min)] lg:min-h-0" style={{ "--chart-min": `${minHeight}px` }} />
       {state.loading && <div className="absolute inset-0 grid place-items-center text-sm text-zinc-500">{t("common.loading")}</div>}

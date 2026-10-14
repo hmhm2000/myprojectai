@@ -43,6 +43,11 @@ export default {
     namesHint: "Pokaż nazwy wskaźników na wykresie (po prawej, przy osi ceny)",
     activeHint: "Aktywne okno: {{symbol}} · {{interval}} - kliknij inne okno, aby je wybrać. Coin, interwał, lista i wskaźniki dotyczą aktywnego okna.",
   },
+  // Linijka: Shift + klik na wykresie.
+  ruler: {
+    bars: { one: "{{count}} świeca", few: "{{count}} świece", many: "{{count}} świec", other: "{{count}} świec" },
+    volume: "Wolumen {{volume}}",
+  },
   // Wskaźniki na wykresie (liczone na serwerze).
   indicators: {
     title: "Wskaźniki",
