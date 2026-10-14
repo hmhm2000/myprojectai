@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { usePrices } from "../context/contexts";
 import { t } from "../i18n";
+import { useMyCoins } from "../lib/useMyCoins";
 import { fmtUnitPrice } from "../lib/format";
 import { sourceName } from "../lib/sources";
 import { SearchIcon } from "./icons";
@@ -10,20 +11,26 @@ const POPULAR = ["BTC", "ETH", "SOL", "XRP", "BNB", "DOGE", "ADA", "SUI", "SPX",
 const LIMIT = 40;
 const NONE = [];
 
-function rank(symbols, query) {
+/** Own coins (held, then favorites) first, then popular ones, then the rest - so the user's coins
+ * are one click away and look-alike tickers of the long catalog come later. */
+function rank(symbols, query, mine) {
+  const own = mine.filter((s) => !query || s.includes(query));
+  const ownSet = new Set(own);
   if (!query) {
-    const popular = POPULAR.filter((s) => symbols.includes(s));
-    return [...popular, ...symbols.filter((s) => !POPULAR.includes(s)).sort()].slice(0, LIMIT);
+    const popular = POPULAR.filter((s) => symbols.includes(s) && !ownSet.has(s));
+    const rest = symbols.filter((s) => !POPULAR.includes(s) && !ownSet.has(s)).sort();
+    return [...own, ...popular, ...rest].slice(0, LIMIT);
   }
+  const byFit = (a, b) => Number(!a.startsWith(query)) - Number(!b.startsWith(query)) || a.length - b.length || a.localeCompare(b);
   const starts = [];
   const contains = [];
   for (const s of symbols) {
-    if (s === query) continue;
+    if (s === query || ownSet.has(s)) continue;
     if (s.startsWith(query)) starts.push(s);
     else if (s.includes(query)) contains.push(s);
   }
-  const exact = symbols.includes(query) ? [query] : [];
-  return [...exact, ...starts.sort((a, b) => a.length - b.length || a.localeCompare(b)), ...contains.sort()].slice(0, LIMIT);
+  const exact = symbols.includes(query) && !ownSet.has(query) ? [query] : [];
+  return [...own.sort(byFit), ...exact, ...starts.sort(byFit), ...contains.sort()].slice(0, LIMIT);
 }
 
 /**
@@ -32,13 +39,20 @@ function rank(symbols, query) {
  */
 export default function CoinPicker({ value, onChange, disabled = false, autoFocus = false, exclude = NONE, id }) {
   const { prices } = usePrices();
+  const myCoins = useMyCoins();
   const [query, setQuery] = useState(value || "");
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
 
   const symbols = useMemo(() => Object.keys(prices).filter((s) => !exclude.includes(s)), [prices, exclude]);
   const q = query.trim().toUpperCase();
-  const matches = useMemo(() => rank(symbols, q), [symbols, q]);
+  const mine = useMemo(
+    () => [...new Set([...myCoins.held, ...myCoins.favorites])].filter((s) => !exclude.includes(s)),
+    [myCoins, exclude],
+  );
+  const held = useMemo(() => new Set(myCoins.held), [myCoins]);
+  const favorite = useMemo(() => new Set(myCoins.favorites), [myCoins]);
+  const matches = useMemo(() => rank(symbols, q, mine), [symbols, q, mine]);
   const canUseCustom = q && /^[A-Z0-9]{1,20}$/.test(q) && !prices[q] && !exclude.includes(q);
   const options = canUseCustom ? [...matches, { custom: q }] : matches;
 
@@ -123,7 +137,11 @@ export default function CoinPicker({ value, onChange, disabled = false, autoFocu
                     </span>
                   ) : (
                     <>
-                      <span className="flex-1 font-medium text-zinc-100">{symbol}</span>
+                      <span className="flex flex-1 items-center gap-1.5 font-medium text-zinc-100">
+                        {symbol}
+                        {held.has(symbol) && <span className="chip text-[10px] text-neon-green">{t("coins.picker.held")}</span>}
+                        {favorite.has(symbol) && <span className="text-[11px] text-amber-300" title={t("coins.picker.favorite")}>★</span>}
+                      </span>
                       <span className="num text-zinc-300">{fmtUnitPrice(quote.price)}</span>
                       <span className="w-16 text-right">
                         <Change24h value={quote.change_24h_pct} />

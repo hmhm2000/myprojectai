@@ -2,6 +2,8 @@
 export default {
   picker: {
     placeholder: "Szukaj coina, np. BTC, SPX…",
+    held: "posiadasz",
+    favorite: "na liście ulubionych",
     useCustom: "Użyj „{{symbol}}”",
     noPriceOnExchanges: "(brak ceny na OKX/Bybit)",
   },

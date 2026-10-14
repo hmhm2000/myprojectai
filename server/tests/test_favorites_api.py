@@ -27,3 +27,20 @@ def test_favorite_lists_flow(client):
 
     assert client.delete(f"/api/favorite-lists/{list_id}", headers=headers).status_code == 204
     assert [l["name"] for l in client.get("/api/favorite-lists", headers=headers).json()] == ["Duże"]
+
+
+def test_my_coins_lists_favorites_and_held_coins(client):
+    headers = login(client)
+    list_id = client.post("/api/favorite-lists", json={"name": "Moje"}, headers=headers).json()["id"]
+    for symbol in ("ETH", "SPX", "ETH"):
+        client.post(f"/api/favorite-lists/{list_id}/coins", json={"symbol": symbol}, headers=headers)
+    portfolio = client.post("/api/portfolios", json={"name": "P"}, headers=headers).json()
+    for symbol in ("BTC", "DOGE"):
+        client.post(f"/api/portfolios/{portfolio['id']}/positions", headers=headers, json={
+            "symbol": symbol, "buy_price": "1", "quantity": "2", "bought_at": "2026-07-01T10:00:00"})
+    doge = next(p["id"] for c in client.get(f"/api/portfolios/{portfolio['id']}", headers=headers).json()["coins"]
+                if c["symbol"] == "DOGE" for p in c["positions"])
+    client.post(f"/api/portfolios/{portfolio['id']}/sales", headers=headers, json={
+        "price": "1", "sold_at": "2026-07-02T10:00:00", "allocations": [{"position_id": doge, "quantity": "2"}]})
+    mine = client.get("/api/my-coins", headers=headers).json()
+    assert mine == {"favorites": ["ETH", "SPX"], "held": ["BTC"]}        # DOGE fully sold

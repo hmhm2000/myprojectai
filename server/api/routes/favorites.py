@@ -73,3 +73,19 @@ def remove_coin(list_id: int, symbol: str, user: User = Depends(get_current_user
     db.commit()
     db.refresh(favorite_list)
     return favorite_list
+
+
+my_coins_router = APIRouter(tags=["favorites"])
+
+
+@my_coins_router.get("/api/my-coins")
+def my_coins(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """The user's coins for the coin search: on a favorites list and held (an open position)."""
+    from models.portfolio import Portfolio, Position
+    from services.pnl import held_quantity, sold_quantity
+
+    favorites = [c.symbol for c in db.query(FavoriteCoin).join(FavoriteList).filter(FavoriteList.user_id == user.id)
+                 .order_by(FavoriteCoin.added_at)]
+    held = [p.symbol for p in db.query(Position).join(Portfolio).filter(Portfolio.user_id == user.id)
+            if held_quantity(p) - sold_quantity(p) > 0]
+    return {"favorites": list(dict.fromkeys(favorites)), "held": sorted(set(held))}

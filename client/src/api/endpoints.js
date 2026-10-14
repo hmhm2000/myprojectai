@@ -105,11 +105,21 @@ export const journalApi = {
   stats: (portfolioId = null) => data(api.get("/api/journal/stats", { params: portfolioId ? { portfolio_id: portfolioId } : {} })),
 };
 
+export const myCoinsApi = {
+  get: () => data(api.get("/api/my-coins")),
+};
+
 export const favoritesApi = {
   list: () => data(api.get("/api/favorite-lists")),
   create: (name) => data(api.post("/api/favorite-lists", { name })),
   rename: (id, name) => data(api.patch(`/api/favorite-lists/${id}`, { name })),
-  remove: (id) => api.delete(`/api/favorite-lists/${id}`),
-  addCoin: (id, symbol) => data(api.post(`/api/favorite-lists/${id}/coins`, { symbol })),
-  removeCoin: (id, symbol) => data(api.delete(`/api/favorite-lists/${id}/coins/${encodeURIComponent(symbol)}`)),
+  remove: (id) => api.delete(`/api/favorite-lists/${id}`).then(favoritesChanged),
+  addCoin: (id, symbol) => data(api.post(`/api/favorite-lists/${id}/coins`, { symbol })).then(favoritesChanged),
+  removeCoin: (id, symbol) => data(api.delete(`/api/favorite-lists/${id}/coins/${encodeURIComponent(symbol)}`)).then(favoritesChanged),
 };
+
+// lets e.g. the coin search show a newly added favorite right away
+function favoritesChanged(result) {
+  window.dispatchEvent(new Event("favorites:changed"));
+  return result;
+}
