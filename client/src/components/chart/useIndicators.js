@@ -94,13 +94,24 @@ export function useIndicators(api, active, definitions, symbol, interval) {
       fetchInto(layer, Math.min(layer.last, tailStart), last).catch(() => {});
     });
 
-    return () => {
+    // Take the series off once: when the list changes, or - before that - when the chart itself is
+    // about to be removed (a new coin / interval). Never touch a removed chart.
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
       resize.disconnect();
       for (const layer of layers.current) {
         saved.set(layer.uid, { values: layer.values, first: layer.first, last: layer.last });
-        removeOutputSeries(api, layer.series);
+        if (!api.removed) removeOutputSeries(api, layer.series);
+        layer.series = {};
       }
       layers.current = [];
+    };
+    const unregister = api.onDispose?.(cleanup);
+    return () => {
+      unregister?.();
+      cleanup();
     };
   }, [api, active, definitions, fetchInto, draw]);
 

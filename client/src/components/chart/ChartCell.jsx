@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { intervalLabel } from "../../lib/intervals";
 import CandleChart from "./CandleChart";
 import { PRICE_PANE_MIN, axisValueOf, paneHeight } from "./indicatorSeries";
@@ -8,7 +8,7 @@ import { useIndicators } from "./useIndicators";
  * One chart window of the (split) chart page: its own coin, interval and indicators.
  * Clicking anywhere in it makes it the active window (the toolbar and the side column work on it).
  */
-export default function ChartCell({ slot, symbol, interval, indicators, definitions, markers, active, split,
+function ChartCell({ slot, symbol, interval, indicators, definitions, markers, active, split,
   focusTime, onActivate, onMarkerClick }) {
   const [chartApi, setChartApi] = useState(null);
   // visible saved indicators of this window, in the shape useIndicators expects
@@ -50,3 +50,6 @@ export default function ChartCell({ slot, symbol, interval, indicators, definiti
     </div>
   );
 }
+
+// re-renders only when its own props change (another window or the side column do not touch it)
+export default memo(ChartCell);

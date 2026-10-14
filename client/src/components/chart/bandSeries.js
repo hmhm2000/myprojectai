@@ -21,7 +21,9 @@ class BandRenderer {
       const to = Math.min(data.bars.length, data.visibleRange.to + 1);
       const points = [];
       for (let i = from; i < to; i++) {
-        const { x, originalData: d } = data.bars[i];
+        const { x, time, originalData: d } = data.bars[i];
+        // candles without a value are left out of `bars` - a jump in the candle index is a gap
+        if (i > from && time - data.bars[i - 1].time > 1) points.push(null);
         const up = d.upper == null ? null : priceToCoordinate(d.upper);
         const low = d.lower == null ? null : priceToCoordinate(d.lower);
         points.push(up == null || low == null ? null : { x: x * hr, up: up * vr, low: low * vr, color: d.fill ?? options.color });

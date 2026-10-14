@@ -20,6 +20,7 @@ const SHOW_TRADES_KEY = "chart:showTrades";
 const CHART_SIDE_KEY = "chart:side";   // "left" (default) | "right" - where the chart is on wide screens
 const LAYOUT_KEY = "chart:layout";      // { count: 1 | 2 | 4, active, slots: [{ symbol, interval }] }
 const LAYOUTS = [1, 2, 4];
+const NO_MARKERS = [];
 const DEFAULT_SLOTS = [["BTC", "1h"], ["ETH", "1h"], ["SOL", "1h"], ["BTC", "1d"]]
   .map(([symbol, interval]) => ({ symbol, interval }));
 
@@ -202,9 +203,17 @@ export default function ChartPage() {
   useEffect(() => setSelected([]), [symbol]);
 
   const events = eventsBy[symbol] ?? [];
+  // Stable per-window inputs: a window redraws only when ITS indicators / markers change (new arrays on
+  // every render made every window rebuild all its indicator series on each click - very slow with 2-4).
+  const indicatorsBySlot = useMemo(
+    () => [0, 1, 2, 3].map((n) => savedIndicators.filter((i) => (i.slot ?? 0) === n)),
+    [savedIndicators],
+  );
   // Only trades marked "show on chart"; the marker uses the real trade time and price.
-  const markersFor = (s) => (showTrades ? eventsBy[s] ?? [] : [])
-    .filter((e) => e.showOnChart).map(({ id, side, time, price }) => ({ id, side, time, price }));
+  const markersBySymbol = useMemo(() => Object.fromEntries(Object.entries(eventsBy).map(([s, list]) => [
+    s, (showTrades ? list : []).filter((e) => e.showOnChart).map(({ id, side, time, price }) => ({ id, side, time, price })),
+  ])), [eventsBy, showTrades]);
+  const onMarkerClick = useCallback((hits) => setSelected(hits.map((m) => m.id)), []);
 
   const setShown = (event, show) => setEventsBy((all) => ({
     ...all, [event.symbol]: (all[event.symbol] ?? []).map((e) => (e.id === event.id ? { ...e, showOnChart: show } : e)),
@@ -253,14 +262,14 @@ export default function ChartPage() {
               slot={n}
               symbol={slot.symbol}
               interval={slot.interval}
-              indicators={savedIndicators.filter((i) => (i.slot ?? 0) === n)}
+              indicators={indicatorsBySlot[n]}
               definitions={definitions}
-              markers={markersFor(slot.symbol)}
+              markers={markersBySymbol[slot.symbol] ?? NO_MARKERS}
               active={n === active}
               split={split}
               focusTime={focusTime}
               onActivate={activate}
-              onMarkerClick={(hits) => setSelected(hits.map((m) => m.id))}
+              onMarkerClick={onMarkerClick}
             />
           ))}
         </div>
@@ -284,7 +293,7 @@ export default function ChartPage() {
         </div>
 
         <div className="tile p-3">
-          <IndicatorSidebar definitions={definitions} items={savedIndicators.filter((i) => (i.slot ?? 0) === active)}
+          <IndicatorSidebar definitions={definitions} items={indicatorsBySlot[active]}
             chartInterval={interval} api={slotApi} onChanged={loadIndicators} />
         </div>
 

@@ -186,8 +186,19 @@ export default function CandleChart({ symbol, interval, markers = [], onMarkerCl
       return color ? { ...bar, color, borderColor: color, wickColor: color } : bar;
     };
     const setBarColors = (colors) => {
+      if (disposed) return;                // a late indicator response for a chart that is gone
       barColors = colors;
       candles.setData(bars.map(colored));
+    };
+
+    // what CandleChart exposes to indicators (onReady); onDispose(fn) runs fn before the chart is removed
+    const disposers = new Set();
+    const api = {
+      chart, candles, container, toChartTime, getBars: () => bars, setBarColors, removed: false,
+      onDispose: (fn) => {
+        disposers.add(fn);
+        return () => disposers.delete(fn);
+      },
     };
 
     const setAll = () => {
@@ -248,7 +259,7 @@ export default function CandleChart({ symbol, interval, markers = [], onMarkerCl
         chart.timeScale().fitContent();
         if (bars.length) setLegend({ bar: bars[bars.length - 1], next: null });
         setState({ loading: false, error: null, source: data.source });
-        readyRef.current?.({ chart, candles, container, toChartTime, getBars: () => bars, setBarColors });
+        readyRef.current?.(api);
       } catch (err) {
         if (!disposed) setState({ loading: false, error: errorMessage(err), source: null });
       }
@@ -275,6 +286,10 @@ export default function CandleChart({ symbol, interval, markers = [], onMarkerCl
     return () => {
       disposed = true;
       clearInterval(poll);
+      // indicators take their series off BEFORE the chart is removed - calling the chart after
+      // remove() made it re-create panes whose document listeners kept every old chart in memory
+      for (const fn of [...disposers]) fn();
+      api.removed = true;
       chart.remove();
     };
   }, [symbol, interval]);
