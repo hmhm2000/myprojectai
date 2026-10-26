@@ -61,7 +61,8 @@ def get_current_admin_user(current_user: User = Depends(get_current_user)) -> Us
 
 
 def ensure_admin_account() -> None:
-    """Main account from .env: create it if missing, or grant admin rights to an existing user."""
+    """Main account from .env: create it if missing, or grant admin rights to an existing user.
+    A non-empty ADMIN_PASSWORD always wins - the account gets it at every start."""
     username = settings.admin_username
     if not username:
         return
@@ -70,8 +71,11 @@ def ensure_admin_account() -> None:
         if user:
             if not user.is_admin:
                 user.is_admin = True
-                db.commit()
                 logger.info("User %s granted admin rights (ADMIN_USERNAME)", username)
+            if settings.admin_password and not verify_password(settings.admin_password, user.hashed_password):
+                user.hashed_password = get_password_hash(settings.admin_password)
+                logger.info("Password of %s set from ADMIN_PASSWORD", username)
+            db.commit()
             return
         if not settings.admin_password:
             logger.warning("Account %s does not exist and ADMIN_PASSWORD is empty - main account not created", username)
