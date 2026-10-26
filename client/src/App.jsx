@@ -6,6 +6,7 @@ import { useAuth } from "./context/contexts";
 import { PriceProvider } from "./context/PriceProvider";
 import AlertsPage from "./pages/AlertsPage";
 import FavoritesPage from "./pages/FavoritesPage";
+import FuturesPage from "./pages/FuturesPage";
 import ImportPage from "./pages/ImportPage";
 import JournalPage from "./pages/JournalPage";
 import LoginPage from "./pages/LoginPage";
@@ -51,6 +52,7 @@ function AppRoutes() {
         <Route path="/chart" element={<Suspense fallback={<FullScreenLoader />}><ChartPage /></Suspense>} />
         <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/transactions" element={<TransactionsPage />} />
+        <Route path="/futures" element={<FuturesPage />} />
         <Route path="/import" element={<ImportPage />} />
         <Route path="/favorites" element={<FavoritesPage />} />
         <Route path="/settings" element={<SettingsPage />} />

@@ -11,6 +11,7 @@ import coins from "./coins.js";
 import common from "./common.js";
 import errors from "./errors.js";
 import favorites from "./favorites.js";
+import futures from "./futures.js";
 import imports from "./imports.js";
 import journal from "./journal.js";
 import nav from "./nav.js";
@@ -34,6 +35,7 @@ export default {
   common,
   errors,
   favorites,
+  futures,
   imports,
   journal,
   nav,

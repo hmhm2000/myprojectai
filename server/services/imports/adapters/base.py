@@ -7,6 +7,7 @@ exchange = a new adapter registered in `ADAPTERS`, no changes elsewhere.
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
@@ -33,14 +34,19 @@ class ImportRecord:
     rows: list[dict] = field(default_factory=list)   # the original export rows (all columns)
     row_count: int = 1                        # how many export rows make up this record
     legacy_ids: tuple = ()                    # earlier keys of the same trade (e.g. ids of single fills)
+    futures: Optional[dict] = None            # futures fill: account, action, side, position, pnl, fee,
+                                              # funding (str values; see services/futures.py)
 
     def csv_values(self) -> dict:
         """Values that come from the export (compared on re-import; manual fields are never part of it)."""
-        return {
+        values = {
             "kind": self.kind, "symbol": self.symbol, "quantity": str(self.quantity), "price": str(self.price),
             "fee_coin": str(self.fee_coin), "fee_quote": str(self.fee_quote),
             "occurred_at": self.occurred_at.isoformat(), "value_usd": str(self.value_usd),
         }
+        if self.futures is not None:
+            values["futures"] = json.dumps(self.futures, sort_keys=True)
+        return values
 
 
 @dataclass

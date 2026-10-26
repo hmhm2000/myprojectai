@@ -102,6 +102,10 @@ export const transactionsApi = {
   setMethod: (portfolioId, method) => api.put(`/api/portfolios/${portfolioId}/cost-method`, { cost_method: method }),
 };
 
+export const futuresApi = {
+  overview: (portfolioId) => data(api.get(`/api/portfolios/${portfolioId}/futures`)),
+};
+
 export const journalApi = {
   stats: (portfolioId = null) => data(api.get("/api/journal/stats", { params: portfolioId ? { portfolio_id: portfolioId } : {} })),
 };

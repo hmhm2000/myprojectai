@@ -166,8 +166,17 @@ class OkxAdapter:
             value_usd=abs(_dec(row.get("Balance_change-USD"))), fingerprint=_fingerprint(row), rows=[row])
 
     def _futures(self, row: dict, when: datetime) -> ImportRecord:
+        """Action "Open long" / "Close short" / "Funding fee expense|income"; Amount in contracts, PnL of a
+        close (or the funding), Fee < 0 a cost. Position Balance is not filled in, so no "position"."""
+        action = row["Action"].strip().lower()
+        fill = "funding" if action.startswith("funding") else ("open" if action.startswith("open") else "close")
+        pnl = _dec(row["PnL"])
+        futures = {"account": "okx", "quote": row["Fee Unit"].strip() or None, "action": fill, "side": "short" if action.endswith("short") else "long",
+                   "position": "", "pnl": format((pnl if fill == "close" else Decimal(0)).normalize(), "f"),
+                   "fee": format((-_dec(row["Fee"])).normalize(), "f"),
+                   "funding": format((pnl if fill == "funding" else Decimal(0)).normalize(), "f"), "liquidation": False}
         return ImportRecord(
             source=self.source, external_id=row["id"].strip(), kind="futures", symbol=row["Symbol"].strip(),
             quantity=_dec(row["Amount"]), occurred_at=when, price=_dec(row["Filled Price"]),
             quote=row["Fee Unit"].strip() or None, fee_quote=-_dec(row["Fee"]),
-            value_usd=_dec(row.get("Pnl-USD")), fingerprint=_fingerprint(row), rows=[row])
+            value_usd=_dec(row.get("Pnl-USD")), fingerprint=_fingerprint(row), rows=[row], futures=futures)

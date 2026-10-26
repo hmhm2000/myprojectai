@@ -62,6 +62,7 @@ export const RefreshIcon = icon(
 );
 export const PlusIcon = icon(<path d="M12 5v14M5 12h14" />);
 export const ListIcon = icon(<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />);
+export const FuturesIcon = icon(<path d="m3 17 6-6 4 4 8-8M15 7h6v6" />);
 export const ImportIcon = icon(
   <>
     <path d="M12 3v12M7 10l5 5 5-5" />

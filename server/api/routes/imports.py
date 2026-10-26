@@ -18,6 +18,7 @@ from models.imports import AccountMovement, ImportFile
 from models.portfolio import Portfolio, Position, Sale
 from models.user import User
 from services.cost_basis import METHODS
+from services.futures import futures_overview
 from services.imports import importer
 from services.price_service import price_service
 from services.transactions import cost_summaries, list_transactions
@@ -154,6 +155,12 @@ def _portfolio(db: Session, portfolio_id: int, user: User) -> Portfolio:
 @router.get("/api/portfolios/{portfolio_id}/transactions")
 def transactions(portfolio_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return list_transactions(db, _portfolio(db, portfolio_id, user))
+
+
+@router.get("/api/portfolios/{portfolio_id}/futures")
+def futures(portfolio_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Futures positions rebuilt from the imported fills, with totals per contract / account / month."""
+    return futures_overview(db, _portfolio(db, portfolio_id, user))
 
 
 @router.put("/api/portfolios/{portfolio_id}/cost-method", status_code=204)

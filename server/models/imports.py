@@ -53,12 +53,15 @@ class AccountMovement(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     portfolio_id = Column(Integer, ForeignKey("portfolios.id", ondelete="SET NULL"), nullable=True, index=True)
-    kind = Column(String, nullable=False)                  # transfer_in | transfer_out | futures | sell_uncovered
+    kind = Column(String, nullable=False)                  # transfer_in | transfer_out | futures | sell_uncovered | conversion
     symbol = Column(String, nullable=False)                # coin, or the futures instrument
     quantity = Column(DecimalString, nullable=False)
     price = Column(DecimalString, nullable=True)
     fee = Column(DecimalString, nullable=True)
     value_usd = Column(DecimalString, nullable=True)       # e.g. value of a transfer at that time
+    # futures fill (JSON): account, action (open / close / funding), side (long / short), position after,
+    # pnl, fee, funding, liquidation - positions are rebuilt from these (services/futures.py)
+    futures = Column(Text, nullable=True)
     occurred_at = Column(DateTime, nullable=False)          # local time, like bought_at / sold_at
     # Same import fields as positions / sales
     source = Column(String, nullable=False, default="manual")

@@ -348,6 +348,8 @@ def _import_parsed(db: Session, user: User, filename: str, sha: str, parsed: Par
             existing.fee = record.fee_quote or None
             existing.value_usd, existing.occurred_at = record.value_usd, local_time(record.occurred_at)
             existing.raw, existing.import_file_id = json.dumps(raw), file_row.id
+            if record.futures is not None:
+                existing.futures = json.dumps(record.futures, sort_keys=True)
 
     db.flush()
     affected = {(d.portfolio_id, d.symbol) for d in sale_defs.values()}
@@ -522,7 +524,8 @@ def _movement(record: ImportRecord, user: User, portfolio_id: int, filename: str
         user_id=user.id, portfolio_id=portfolio_id, kind=record.kind, symbol=record.symbol, quantity=record.quantity,
         price=record.price, fee=record.fee_quote or None, value_usd=record.value_usd,
         occurred_at=local_time(record.occurred_at), source=record.source, external_id=record.external_id,
-        fingerprint=record.fingerprint, raw=json.dumps(_raw(record, filename)), import_file_id=file_id, imported_at=now)
+        fingerprint=record.fingerprint, raw=json.dumps(_raw(record, filename)), import_file_id=file_id, imported_at=now,
+        futures=json.dumps(record.futures, sort_keys=True) if record.futures is not None else None)
 
 
 def _manual_fields(entry) -> dict:
@@ -661,6 +664,8 @@ def _flag_missing(db: Session, user: User, source: str, parsed: ParsedExport, se
     ]
     def kind(entry):
         if isinstance(entry, AccountMovement):
+            if entry.kind == "futures" and entry.futures:          # e.g. "futures:copytrading"
+                return f"futures:{_load(entry.futures).get('account')}"
             return "sell" if entry.kind == "sell_uncovered" else entry.kind
         return "buy" if isinstance(entry, Position) else "sell"
 

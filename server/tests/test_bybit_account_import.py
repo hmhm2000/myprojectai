@@ -71,18 +71,20 @@ def run(path, user, account="bybitCOM"):
         return import_file(db, db.get(User, user.id), ImportEntry(path, path.name, account))
 
 
-def test_uta_ledger_spot_fills_fees_and_skipped_rows(tmp_path):
+def test_uta_ledger_spot_futures_fees_and_skipped_rows(tmp_path):
     parsed = BybitAccountAdapter().parse(write(tmp_path, UTA_NAME, UTA_HEADER, UTA_ROWS))
     records = {r.kind: r for r in parsed.records}
-    assert sorted(records) == ["buy", "conversion", "sell"] and parsed.kinds == {"buy", "sell", "conversion"}
+    assert sorted(records) == ["buy", "conversion", "futures", "sell"]
+    assert parsed.kinds == {"buy", "sell", "conversion", "futures:uta"}
+    assert sum(r.kind == "futures" for r in parsed.records) == 3          # open, funding, close
     buy, sale = records["buy"], records["sell"]
     assert (buy.symbol, buy.quote, buy.quantity, buy.price, buy.fee_coin) == ("ABC", "USDT", D(400), D("0.25"), D("0.4"))
     assert sale.quantity == D(300) and sale.row_count == 4 and sale.fee_quote == D("0.14") and sale.fee_coin == 0
     assert sale.price == D("0.4666666667") and sale.external_id == "ABCUSDT:sell:2025-03-02 10:00:00"
     assert records["conversion"].symbol == "USDC"
     codes = {w["code"]: w["params"] for w in parsed.warnings}
-    assert codes == {"futures_not_imported": {"count": 3}, "internal_transfers_skipped": {"count": 1}}
-    assert parsed.balances["ABC"] == D(100) and parsed.rows_skipped == 4
+    assert codes == {"internal_transfers_skipped": {"count": 1}}
+    assert parsed.balances["ABC"] == D(100) and parsed.rows_skipped == 1
 
 
 def test_balance_after_fills_of_one_second_in_any_order(tmp_path):
@@ -113,7 +115,7 @@ def test_account_from_folder_and_no_false_missing(tmp_path, user):
         assert db.query(Position).filter(Position.missing_in_export.is_(True)).count() == 0
         assert db.query(Sale).filter(Sale.source == "bybit_com").count() == 1
         kinds = sorted(m.kind for m in db.query(AccountMovement).filter(AccountMovement.source == "bybit_com"))
-        assert kinds == ["conversion", "transfer_in", "transfer_in", "transfer_out"]
+        assert kinds == ["conversion", "futures", "futures", "futures", "transfer_in", "transfer_in", "transfer_out"]
 
 
 SALE_200 = UTA_ROWS[:2]                                   # 200 ABC sold on 2025-03-02, no purchase

@@ -5,6 +5,7 @@ export default {
   chart: "Wykres",
   alerts: "Alerty",
   transactions: "Transakcje",
+  futures: "Futures",
   import: "Import",
   favorites: "Ulubione",
   settings: "Ustawienia",

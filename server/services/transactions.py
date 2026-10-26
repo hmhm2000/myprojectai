@@ -1,7 +1,8 @@
-"""Transaction details: every entry of a portfolio (purchases, sales, transfers, futures) with its
+"""Transaction details: every entry of a portfolio (purchases, sales, transfers) with its
 origin and the original export data, plus the per-coin cost summary (average / FIFO / LIFO).
 
-Exchange independent - reads the stored model only, never an export file.
+Exchange independent - reads the stored model only, never an export file. Futures fills are not
+listed here - they have their own view of positions (services/futures.py).
 """
 from __future__ import annotations
 
@@ -64,7 +65,8 @@ def list_transactions(db: Session, portfolio: Portfolio) -> list[dict]:
             "price": first.price, "fee_coin": None, "fee_quote": sum((r.fee_quote for r in rows), Decimal(0)),
             "value": first.price * quantity, "occurred_at": first.sold_at,
             "journal": {"exit_reason": first.exit_reason}, **_common(first, files, changes)})
-    for movement in db.query(AccountMovement).filter(AccountMovement.portfolio_id == portfolio.id):
+    for movement in db.query(AccountMovement).filter(AccountMovement.portfolio_id == portfolio.id,
+                                                     AccountMovement.kind != "futures"):
         items.append({
             "kind": "movement", "id": str(movement.id), "type": movement.kind, "symbol": movement.symbol,
             "quantity": movement.quantity, "price": movement.price, "fee_coin": None, "fee_quote": movement.fee,

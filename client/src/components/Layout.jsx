@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/contexts";
 import { t } from "../i18n";
-import { BellIcon, BookIcon, ChartIcon, ImportIcon, ListIcon, LogoutIcon, SettingsIcon, StarIcon, WalletIcon } from "./icons";
+import { BellIcon, BookIcon, ChartIcon, FuturesIcon, ImportIcon, ListIcon, LogoutIcon, SettingsIcon, StarIcon, WalletIcon } from "./icons";
 import { useAlertWatcher } from "./useAlertWatcher";
 
 const LINKS = [
@@ -10,6 +10,7 @@ const LINKS = [
   { to: "/chart", labelKey: "nav.chart", Icon: ChartIcon },
   { to: "/alerts", labelKey: "nav.alerts", Icon: BellIcon, badge: true },
   { to: "/transactions", labelKey: "nav.transactions", Icon: ListIcon },
+  { to: "/futures", labelKey: "nav.futures", Icon: FuturesIcon },
   { to: "/import", labelKey: "nav.import", Icon: ImportIcon },
   { to: "/favorites", labelKey: "nav.favorites", Icon: StarIcon },
   { to: "/settings", labelKey: "nav.settings", Icon: SettingsIcon },
