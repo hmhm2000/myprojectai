@@ -1,4 +1,5 @@
 """Import panel (export files in the folder, sync, flagged entries) and transaction details."""
+import hashlib
 import json
 from datetime import datetime
 from decimal import Decimal
@@ -71,11 +72,12 @@ def _status(db: Session, user: User) -> dict:
     folder.mkdir(parents=True, exist_ok=True)
     imported = {f.sha256: f for f in db.query(ImportFile).filter(ImportFile.user_id == user.id)}
     files = []
-    for path in importer.csv_files(folder):
-        sha = importer.sha256_of(path)
+    for entry in importer.import_entries(folder):
+        data = entry.read_bytes()
+        sha = hashlib.sha256(data).hexdigest()
         row = imported.get(sha)
-        files.append({"filename": path.relative_to(folder).as_posix(), "size": path.stat().st_size,
-                      "modified": datetime.fromtimestamp(path.stat().st_mtime), "sha256": sha,
+        files.append({"filename": entry.label, "size": len(data),
+                      "modified": datetime.fromtimestamp(entry.path.stat().st_mtime), "sha256": sha,
                       "status": "imported" if row else "new", "import": _file_out(row) if row else None})
     history = (db.query(ImportFile).filter(ImportFile.user_id == user.id)
                .order_by(ImportFile.imported_at.desc(), ImportFile.id.desc()).limit(50).all())

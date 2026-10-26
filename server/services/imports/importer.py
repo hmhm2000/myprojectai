@@ -1,7 +1,9 @@
 """Import of exchange export files into the ordinary portfolio model.
 
-Every exchange has its own import portfolio (kind = "import", source = exchange, e.g. "OKX"), created
-on the first import - manual portfolios are never used or changed by an import.
+Every exchange account has its own import portfolio (kind = "import", source = account, e.g. "OKX"),
+created on the first import - manual portfolios are never used or changed by an import. The account
+is the subfolder of the import folder (okx/, bybitEU/, bybitCOM/ - see ACCOUNTS; the file format is
+recognised from the content); CSVs inside ZIPs are imported like loose files.
 A purchase becomes a Position and a sale a sale group - created by the same code as the manual form
 (`_write_sale_group`), with `source` / `external_id` / `raw`. Transfers and futures are stored as
 AccountMovements (details view only). Rules:
@@ -13,16 +15,20 @@ AccountMovements (details view only). Rules:
 - entries of this source missing from a newer file (within the period it covers) are only flagged,
 - a new id whose (time, order id, action, amount, price) already exists is a warning, not a duplicate,
 - sales are assigned to this source's purchases of the same portfolio FIFO (like the form's FIFO
-  hint); a part not covered by purchases (coins that came by transfer) is reported.
+  hint); a part not covered by purchases is reported - as coming from an earlier transfer in when
+  one can cover it, otherwise as uncovered.
 """
 from __future__ import annotations
 
 import hashlib
 import json
 import logging
+import tempfile
 import threading
 import uuid
-from dataclasses import dataclass, field
+import zipfile
+from contextlib import contextmanager
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
@@ -38,12 +44,19 @@ from models.portfolio import Portfolio, Position, Sale, utcnow
 from models.user import User
 from services.imports.adapters.base import ImportRecord, ParsedExport
 from services.imports.adapters.bybit import BybitAdapter
+from services.imports.adapters.bybit_account import STABLE, BybitAccountAdapter
 from services.imports.adapters.okx import QUOTES, OkxAdapter
 from services.pnl import held_quantity
 
 logger = logging.getLogger(__name__)
 
-ADAPTERS = [OkxAdapter(), BybitAdapter()]
+ADAPTERS = [OkxAdapter(), BybitAdapter(), BybitAccountAdapter()]
+# import subfolder (lower case) -> (source, portfolio name); files elsewhere use the adapter's own
+ACCOUNTS = {
+    "okx": ("okx", "OKX"),
+    "bybiteu": ("bybit", "Bybit.eu"),
+    "bybitcom": ("bybit_com", "Bybit.com"),
+}
 BALANCE_TOLERANCE = Decimal("0.00000001")
 SALE_NAMESPACE = uuid.UUID("5b0c6f43-6f1e-4d3b-9a43-2f6f0c3e7a11")
 _lock = threading.Lock()
@@ -81,17 +94,67 @@ class SaleDef:
 
 # ------------------------------------------------------------------ helpers
 
+@dataclass(frozen=True)
+class ImportEntry:
+    """One export file: a CSV in the import folder (or a subfolder) or a CSV inside a ZIP there."""
+    path: Path
+    label: str                          # shown in the panel: path in the folder (" > member" for a ZIP)
+    account: Optional[str] = None       # first subfolder, e.g. "bybitCOM" - decides the portfolio
+    member: Optional[str] = None        # name inside the ZIP
+
+    @property
+    def name(self) -> str:
+        return Path(self.member).name if self.member else self.path.name
+
+    def read_bytes(self) -> bytes:
+        if self.member is None:
+            return self.path.read_bytes()
+        with zipfile.ZipFile(self.path) as archive:
+            return archive.read(self.member)
+
+
 def sha256_of(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1 << 16), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def csv_files(folder: Path) -> list[Path]:
-    """CSV files of the import folder and its subfolders, in path order."""
-    return sorted(folder.rglob("*.csv"))
+def import_entries(folder: Path) -> list[ImportEntry]:
+    """CSV files of the folder and its subfolders, also inside ZIPs - per account, by file name (the
+    names hold the dates, so an account's files go roughly from the oldest)."""
+    entries = []
+    for path in folder.rglob("*"):
+        suffix = path.suffix.lower()
+        if not path.is_file() or suffix not in (".csv", ".zip"):
+            continue
+        relative = path.relative_to(folder)
+        account = relative.parts[0] if len(relative.parts) > 1 else None
+        if suffix == ".csv":
+            entries.append(ImportEntry(path, relative.as_posix(), account))
+            continue
+        try:
+            with zipfile.ZipFile(path) as archive:
+                members = [m for m in archive.namelist() if m.lower().endswith(".csv")]
+        except zipfile.BadZipFile:
+            logger.warning("Import: %s is not a valid ZIP", path)
+            continue
+        entries += [ImportEntry(path, f"{relative.as_posix()} > {m}", account, m) for m in members]
+    return sorted(entries, key=lambda e: ((e.account or "").lower(), e.name, e.label))
+
+
+@contextmanager
+def _as_file(entry: ImportEntry, data: bytes):
+    """A path the adapters can read - a ZIP member is written to a temporary file with its own name."""
+    if entry.member is None:
+        yield entry.path
+        return
+    with tempfile.TemporaryDirectory() as folder:
+        path = Path(folder) / entry.name
+        path.write_bytes(data)
+        yield path
+
+
+def account_of(entry: ImportEntry, adapter) -> tuple[str, str]:
+    """(source, portfolio name) of the file: by its subfolder, else the exchange's default."""
+    return ACCOUNTS.get((entry.account or "").lower(), (adapter.source, adapter.name))
 
 
 def local_time(moment: datetime) -> datetime:
@@ -100,7 +163,7 @@ def local_time(moment: datetime) -> datetime:
 
 
 def detect_adapter(path: Path):
-    head = path.read_text(encoding="utf-8-sig", errors="replace")[:4096]
+    head = path.read_bytes()[:4096].decode("utf-8-sig", errors="replace")
     return next((a for a in ADAPTERS if a.detect(path, head)), None)
 
 
@@ -154,35 +217,44 @@ class _Index:
 # ------------------------------------------------------------------ public
 
 def sync_folder(db: Session, user: User, folder: Path = None, reprocess: bool = False) -> list[FileResult]:
-    """Import every new file of the folder and its subfolders (created if missing; e.g. okx/, bybit/ -
-    the exchange is recognised from the content, not the folder). Removing a file deletes nothing.
+    """Import every new file of the folder and its subfolders, ZIPs included (folder created if missing).
+    Removing a file deletes nothing.
     `reprocess` also goes through files imported before (e.g. after a change of the import rules) -
     the same upsert, so nothing is duplicated and manual fields stay."""
     folder = Path(folder or settings.import_dir)
     folder.mkdir(parents=True, exist_ok=True)
     with _lock:
-        return [import_file(db, user, path, reprocess) for path in csv_files(folder)]
+        return [import_file(db, user, entry, reprocess) for entry in import_entries(folder)]
 
 
-def import_file(db: Session, user: User, path: Path, reprocess: bool = False) -> FileResult:
-    sha = sha256_of(path)
+def import_file(db: Session, user: User, entry, reprocess: bool = False) -> FileResult:
+    """Import one file - an ImportEntry, or a plain path (then the exchange's default portfolio)."""
+    if isinstance(entry, Path):
+        entry = ImportEntry(entry, entry.name)
+    name = entry.name
+    data = entry.read_bytes()
+    sha = hashlib.sha256(data).hexdigest()
     known = db.query(ImportFile).filter(ImportFile.user_id == user.id, ImportFile.sha256 == sha).first()
     if known and not reprocess:
-        return FileResult(path.name, "already_imported")
-    adapter = detect_adapter(path)
-    if adapter is None:
-        return FileResult(path.name, "unrecognized")
-    try:
-        parsed = adapter.parse(path)
-        result = _import_parsed(db, user, path.name, sha, parsed, adapter.name, known)
-        db.commit()
-        logger.info("Imported %s: %s new, %s updated, %s skipped, %s unchanged", path.name, result.rows_new,
-                    result.rows_updated, result.rows_skipped, result.rows_unchanged)
-        return result
-    except Exception as exc:   # one broken file must not stop the others
-        db.rollback()
-        logger.exception("Import of %s failed", path.name)
-        return FileResult(path.name, "error", adapter.source, message=str(exc)[:300])
+        return FileResult(name, "already_imported")
+    with _as_file(entry, data) as path:
+        adapter = detect_adapter(path)
+        if adapter is None:
+            return FileResult(name, "unrecognized")
+        source, portfolio_name = account_of(entry, adapter)
+        try:
+            parsed = adapter.parse(path)
+            parsed.source = source
+            parsed.records = [replace(r, source=source) for r in parsed.records]
+            result = _import_parsed(db, user, name, sha, parsed, portfolio_name, known)
+            db.commit()
+            logger.info("Imported %s: %s new, %s updated, %s skipped, %s unchanged", name, result.rows_new,
+                        result.rows_updated, result.rows_skipped, result.rows_unchanged)
+            return result
+        except Exception as exc:   # one broken file must not stop the others
+            db.rollback()
+            logger.exception("Import of %s failed", entry.label)
+            return FileResult(name, "error", source, message=str(exc)[:300])
 
 
 # ------------------------------------------------------------------ import of one parsed file
@@ -521,6 +593,11 @@ def _rebuild_sales(db: Session, user: User, source: str, portfolio_id: int, symb
                  .order_by(Position.bought_at, Position.id).all())
     # other sales already on these purchases (e.g. added by hand) stay where they are
     available = {p.id: held_quantity(p) - sum((s.quantity for s in p.sales), Decimal(0)) for p in positions}
+    transfers = sorted((m.occurred_at, m.quantity if m.kind == "transfer_in" else -m.quantity) for m in db.query(
+        AccountMovement).filter(AccountMovement.user_id == user.id, AccountMovement.portfolio_id == portfolio_id,
+                                AccountMovement.symbol == symbol, AccountMovement.source == source,
+                                AccountMovement.kind.in_(("transfer_in", "transfer_out"))))
+    transferred = Decimal(0)         # coins that came in by transfer and were not sold / sent out yet
 
     for definition in sorted(definitions.values(), key=lambda d: (d.sold_at, d.external_id)):
         allocations, left = [], definition.quantity
@@ -533,13 +610,18 @@ def _rebuild_sales(db: Session, user: User, source: str, portfolio_id: int, symb
             available[position.id] -= take
             left -= take
             allocations.append(SaleAllocationIn(position_id=position.id, quantity=take))
+        while transfers and transfers[0][0] <= definition.sold_at:
+            transferred = max(transferred + transfers.pop(0)[1], Decimal(0))
+        from_transfer = min(left, transferred) if left > 0 else Decimal(0)
+        transferred -= from_transfer
         raw = {**definition.raw, "unallocated": str(left) if left > 0 else None}
         common = dict(source=source, external_id=definition.external_id, fingerprint=definition.fingerprint,
                       raw=json.dumps(raw), import_file_id=definition.import_file_id,
                       imported_at=definition.imported_at, note=definition.manual.get("note"),
                       custom_fields=definition.manual.get("custom_fields"))
         if left > 0:
-            result.warnings.append({"code": "sale_uncovered", "params": {
+            code = "sale_from_transfer" if from_transfer == left else "sale_uncovered"
+            result.warnings.append({"code": code, "params": {
                 "id": definition.external_id, "symbol": symbol, "quantity": format(left.normalize(), "f")}})
         if not allocations:
             db.add(AccountMovement(user_id=user.id, portfolio_id=portfolio_id, kind="sell_uncovered", symbol=symbol,
@@ -577,8 +659,13 @@ def _flag_missing(db: Session, user: User, source: str, parsed: ParsedExport, se
             AccountMovement.user_id == user.id, AccountMovement.source == source,
             AccountMovement.external_id.isnot(None))
     ]
+    def kind(entry):
+        if isinstance(entry, AccountMovement):
+            return "sell" if entry.kind == "sell_uncovered" else entry.kind
+        return "buy" if isinstance(entry, Position) else "sell"
+
     for entry, moment in entries:
-        if start <= moment < end:
+        if start <= moment < end and (parsed.kinds is None or kind(entry) in parsed.kinds):
             entry.missing_in_export = entry.external_id not in seen
 
 
@@ -616,7 +703,7 @@ def _balance_check(db: Session, user: User, source: str, parsed: ParsedExport) -
     computed = source_balances(db, user, source, local_time(parsed.period[1]) if parsed.period else None)
     out = []
     for coin, expected in sorted(parsed.balances.items()):
-        if coin in QUOTES:
+        if coin in QUOTES or coin in STABLE:          # quote currencies, stablecoins and fiat: not tracked
             continue
         actual = computed.get(coin, Decimal(0))
         ok = abs(actual - expected) <= BALANCE_TOLERANCE

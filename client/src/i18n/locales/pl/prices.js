@@ -15,6 +15,7 @@ export default {
   sources: {
     okx: "OKX",
     bybit: "Bybit",
+    bybit_com: "Bybit.com",
   },
   // Błędy giełd - klucze to kody z backendu (sources[].error_code).
   sourceErrors: {

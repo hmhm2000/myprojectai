@@ -26,6 +26,7 @@ export default {
     transfer_out: "Transfer z",
     futures: "Futures",
     sell_uncovered: "Sprzedaż bez pokrycia",
+    conversion: "Zamiana (stablecoin / fiat)",
   },
   methods: {
     average: "Średnia ważona",

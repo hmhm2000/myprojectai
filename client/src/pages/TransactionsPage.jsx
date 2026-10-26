@@ -8,7 +8,7 @@ import { fmtDateTime, fmtMoney, fmtQty, fmtUnitPrice } from "../lib/format";
 
 const METHODS = ["average", "fifo", "lifo"];
 const TYPE_TONE = { buy: "text-profit", sell: "text-loss", transfer_in: "text-sky-300", transfer_out: "text-amber-300",
-  futures: "text-zinc-400", sell_uncovered: "text-loss" };
+  futures: "text-zinc-400", sell_uncovered: "text-loss", conversion: "text-zinc-400" };
 const dash = (v, fmt) => (v === null || v === undefined ? "—" : fmt(v));
 
 /** Per-coin cost summary with the method switch and an own price for the unrealized result. */

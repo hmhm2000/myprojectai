@@ -97,14 +97,14 @@ def test_folder_sync_reads_exchange_subfolders(client, user):
     folder = Path(settings.import_dir)
     shutil.rmtree(folder, ignore_errors=True)
     (folder / "okx").mkdir(parents=True)
-    (folder / "bybit").mkdir()
+    (folder / "bybitEU").mkdir()
     write_okx(folder / "okx", full_name(), range(1, 8))
-    write(folder / "bybit", JAN_MAR, range(1, 6))
+    write(folder / "bybitEU", JAN_MAR, range(1, 6))
     try:
         status = client.post("/api/import/sync", headers=headers).json()
         assert {r["filename"]: (r["status"], r["source"]) for r in status["last_sync"]} == {
             full_name(): ("imported", "okx"), JAN_MAR: ("imported", "bybit")}
-        assert {f["filename"] for f in status["files"]} == {f"okx/{full_name()}", f"bybit/{JAN_MAR}"}
-        assert sorted(p["name"] for p in status["portfolios"]) == ["Bybit", "OKX"]
+        assert {f["filename"] for f in status["files"]} == {f"okx/{full_name()}", f"bybitEU/{JAN_MAR}"}
+        assert sorted(p["name"] for p in status["portfolios"]) == ["Bybit.eu", "OKX"]
     finally:
         shutil.rmtree(folder, ignore_errors=True)

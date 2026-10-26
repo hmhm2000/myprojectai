@@ -13,14 +13,14 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Optional, Protocol
 
-KINDS = ("buy", "sell", "transfer_in", "transfer_out", "futures")
+KINDS = ("buy", "sell", "transfer_in", "transfer_out", "futures", "conversion")
 
 
 @dataclass(frozen=True)
 class ImportRecord:
     source: str                    # "okx"
     external_id: str               # unique per source (OKX: the "id" column of the main row)
-    kind: str                      # one of KINDS
+    kind: str                      # one of KINDS (conversion: swap between stablecoins / fiat)
     symbol: str                    # coin (BTC) - for futures the instrument (BTC-USD-UM-XPERP-...)
     quantity: Decimal              # coins bought / sold / transferred (gross, before fees)
     occurred_at: datetime          # timezone aware
@@ -52,6 +52,8 @@ class ParsedExport:
     warnings: list[dict] = field(default_factory=list)   # [{code, params}]
     period: Optional[tuple[datetime, datetime]] = None   # time range the export covers
     balances: dict[str, Decimal] = field(default_factory=dict)  # coin -> balance after the last row
+    kinds: Optional[set[str]] = None                  # kinds of entries the file covers (None = all) -
+                                                      # only those can be flagged as missing from it
 
 
 class ExchangeAdapter(Protocol):
