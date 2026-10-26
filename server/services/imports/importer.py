@@ -37,12 +37,13 @@ from models.imports import AccountMovement, ImportChange, ImportFile
 from models.portfolio import Portfolio, Position, Sale, utcnow
 from models.user import User
 from services.imports.adapters.base import ImportRecord, ParsedExport
+from services.imports.adapters.bybit import BybitAdapter
 from services.imports.adapters.okx import QUOTES, OkxAdapter
 from services.pnl import held_quantity
 
 logger = logging.getLogger(__name__)
 
-ADAPTERS = [OkxAdapter()]
+ADAPTERS = [OkxAdapter(), BybitAdapter()]
 BALANCE_TOLERANCE = Decimal("0.00000001")
 SALE_NAMESPACE = uuid.UUID("5b0c6f43-6f1e-4d3b-9a43-2f6f0c3e7a11")
 _lock = threading.Lock()
@@ -86,6 +87,11 @@ def sha256_of(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1 << 16), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def csv_files(folder: Path) -> list[Path]:
+    """CSV files of the import folder and its subfolders, in path order."""
+    return sorted(folder.rglob("*.csv"))
 
 
 def local_time(moment: datetime) -> datetime:
@@ -148,13 +154,14 @@ class _Index:
 # ------------------------------------------------------------------ public
 
 def sync_folder(db: Session, user: User, folder: Path = None, reprocess: bool = False) -> list[FileResult]:
-    """Import every new file of the folder (created if missing). Removing a file deletes nothing.
+    """Import every new file of the folder and its subfolders (created if missing; e.g. okx/, bybit/ -
+    the exchange is recognised from the content, not the folder). Removing a file deletes nothing.
     `reprocess` also goes through files imported before (e.g. after a change of the import rules) -
     the same upsert, so nothing is duplicated and manual fields stay."""
     folder = Path(folder or settings.import_dir)
     folder.mkdir(parents=True, exist_ok=True)
     with _lock:
-        return [import_file(db, user, path, reprocess) for path in sorted(folder.glob("*.csv"))]
+        return [import_file(db, user, path, reprocess) for path in csv_files(folder)]
 
 
 def import_file(db: Session, user: User, path: Path, reprocess: bool = False) -> FileResult:

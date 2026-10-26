@@ -1,7 +1,7 @@
 // Panel „Import”: pliki eksportu z giełdy w folderze, synchronizacja, wpisy nieobecne w eksporcie.
 export default {
   title: "Import",
-  intro: "Pliki CSV z giełdy (na razie OKX) z folderu poniżej. Każda giełda ma własny portfel importowany (np. „OKX”) - import tworzy w nim zwykłe pozycje i sprzedaże, tak jak formularz. Ręczne portfele nie są nigdy zmieniane.",
+  intro: "Pliki CSV z giełd (OKX, Bybit) z folderu poniżej, także z jego podfolderów (np. okx/, bybit/) - giełdę rozpoznaje po zawartości pliku. Każda giełda ma własny portfel importowany (np. „OKX”) - import tworzy w nim zwykłe pozycje i sprzedaże, tak jak formularz. Ręczne portfele nie są nigdy zmieniane.",
   sync: "Synchronizuj",
   syncing: "Synchronizowanie…",
   reprocess: "Przetwórz ponownie wszystkie pliki",
@@ -11,7 +11,7 @@ export default {
   openDetails: "Szczegóły transakcji: {{name}} →",
   lastSync: "Ostatnia synchronizacja",
   files: "Pliki w folderze",
-  noFiles: "Brak plików CSV w folderze. Wrzuć tam eksport z OKX i kliknij „Synchronizuj”.",
+  noFiles: "Brak plików CSV w folderze. Wrzuć tam eksport z OKX lub Bybit i kliknij „Synchronizuj”.",
   history: "Historia importów",
   noHistory: "Nic jeszcze nie zaimportowano.",
   counts: "{{total}} wierszy: {{new}} nowych, {{updated}} zmienionych, {{unchanged}} bez zmian, {{skipped}} pominiętych",
@@ -32,6 +32,7 @@ export default {
     sale_uncovered: "Sprzedaż {{id}}: {{quantity}} {{symbol}} nie ma pokrycia w zakupach z tej giełdy (np. coiny z transferu) - ta część nie jest przypisana do pozycji",
     balance_mismatch: "Saldo {{coin}} różni się od kolumny Balance: eksport {{export}}, z transakcji {{computed}}",
     balance_ok: "Saldo {{coin}} zgodne z eksportem ({{export}})",
+    fee_other_coin: "Wiersz {{id}} - prowizja {{fee}} {{coin}} w innej walucie niż para, nie wliczona do kosztów",
     manual_merged: "Transakcja wpisana ręcznie do portfela importowanego ({{symbol}}, {{quantity}}, {{time}}) to ta sama co w pliku - połączono w jeden wpis (dane z giełdy, notatki zostają)",
   },
   missing: {
