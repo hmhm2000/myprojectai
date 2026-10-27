@@ -60,8 +60,9 @@ def main() -> int:
         subprocess.run([npm, "install"], cwd=CLIENT, check=True)
 
     processes = {
+        # an open app keeps connections alive (price polling) - without a timeout a reload never finishes
         "backend": subprocess.Popen([server_python(), "-m", "uvicorn", "main:app", "--port", str(BACKEND_PORT),
-                                     "--reload"], cwd=SERVER),
+                                     "--reload", "--timeout-graceful-shutdown", "3"], cwd=SERVER),
         "frontend": subprocess.Popen([npm, "run", "dev"], cwd=CLIENT),
     }
     print(f"\n  App:     http://localhost:{FRONTEND_PORT}\n  Backend: http://localhost:{BACKEND_PORT}/docs\n"
