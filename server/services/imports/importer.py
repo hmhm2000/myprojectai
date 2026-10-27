@@ -8,9 +8,11 @@ A purchase becomes a Position and a sale a sale group - created by the same code
 (`_write_sale_group`), with `source` / `external_id` / `raw`. Transfers and futures are stored as
 AccountMovements (details view only). Rules:
 - a file with the same sha256 as an imported one is skipped ("already imported"),
-- key (source, external_id): new -> created; same values -> nothing; different values -> the export
-  fields are updated, manual fields (journal, notes, own fields, chart flag) are kept and every change
-  is logged in import_changes,
+- key (source, external_id), looked up among ALL stored entries of the source (open and closed): new
+  -> created; same values -> nothing; different values -> the export fields are updated, manual fields
+  (journal, notes, own fields, chart flag) are kept and every change is logged in import_changes;
+  a record whose rows are only a part of the stored ones (an order cut by the start of a shorter
+  export) keeps the stored, fuller version,
 - nothing with another source (manual entries, other exchanges) is ever read for writing or deleted,
 - entries of this source missing from a newer file (within the period it covers) are only flagged,
 - a new id whose (time, order id, action, amount, price) already exists is a warning, not a duplicate,
@@ -27,6 +29,7 @@ import tempfile
 import threading
 import uuid
 import zipfile
+from collections import Counter
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import datetime
@@ -185,6 +188,15 @@ def _raw(record: ImportRecord, filename: str, **extra) -> dict:
     return {"file": filename, "values": record.csv_values(), "rows": record.rows, **extra}
 
 
+def _part_of(rows: list[dict], stored: Optional[list[dict]]) -> bool:
+    """True when every export row of the new record is already among the stored ones and the stored
+    record has more - the file shows only a part of the order (its other fills are outside the file)."""
+    if not rows or not stored or len(rows) >= len(stored):
+        return False
+    have = Counter(json.dumps(r, sort_keys=True) for r in stored)
+    return not Counter(json.dumps(r, sort_keys=True) for r in rows) - have
+
+
 def _load(text: Optional[str]) -> dict:
     try:
         return json.loads(text) if text else {}
@@ -326,6 +338,11 @@ def _import_parsed(db: Session, user: User, filename: str, sha: str, parsed: Par
         new_values = record.csv_values()
         if old_values == new_values:
             result.rows_unchanged += record.row_count
+            continue
+        if _part_of(record.rows, old_raw.get("rows")):
+            # a shorter export (e.g. the last month) holds only some fills of an order stored in full
+            result.rows_unchanged += record.row_count
+            result.warnings.append({"code": "partial_order_kept", "params": {"id": ext}})
             continue
         if old_values.get("kind") not in (None, record.kind):
             result.rows_skipped += record.row_count

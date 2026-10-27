@@ -57,3 +57,18 @@ def test_own_portfolio_and_overlapping_files(tmp_path, user):
         assert db.query(Position).filter(Position.source == "binance").count() == 3      # ETH x2, 1INCH
         assert len({s.group_id for s in db.query(Sale).filter(Sale.source == "binance")}) == 1
         assert db.query(AccountMovement).filter(AccountMovement.kind == "conversion").count() == 2
+
+
+def test_shorter_exports_never_duplicate_or_cut_orders(tmp_path, user):
+    """Full history, then "last month" (cuts order 103: only its last fill), then full again."""
+    run(write(tmp_path, NAME, ROWS), user, account="binance")
+    month = run(write(tmp_path, "Binance-Spot-Trade-History-202611271200(UTC+1)-part1-of1.csv",
+                      [ROWS[0], ROWS[4]]), user, account="binance")
+    assert (month.rows_new, month.rows_updated, month.rows_unchanged) == (0, 0, 2)
+    assert [w["code"] for w in month.warnings] == ["partial_order_kept"]
+    again = run(write(tmp_path, "Binance-Spot-Trade-History-202612011200(UTC+1)-part1-of1.csv", ROWS + [""]),
+                user, account="binance")
+    assert (again.rows_new, again.rows_updated) == (0, 0)
+    with SessionLocal() as db:
+        eth = db.query(Position).filter(Position.source == "binance", Position.symbol == "ETH").all()
+        assert sorted(p.quantity for p in eth) == [D("0.2"), D("0.25")]      # ETHPLN 0.2, order 103 in full
