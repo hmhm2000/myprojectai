@@ -39,6 +39,7 @@ export default {
     internal_transfers_skipped: "{{count}} przelewów między własnymi kontami Bybit (Funding, UTA, copy trading) - pominięte, to nie wpłaty ani wypłaty",
     deposit_history_skipped: "Historia wpłat i wypłat ({{count}} wierszy) - pominięta, te same operacje są brane z ledgera konta Funding",
     fiat_converted: "Zlecenie {{id}} ({{symbol}}) za {{fiat}} - cena przeliczona na USDT kursem {{rate}} {{fiat}}/USDT z najbliższej zamiany w pliku",
+    partial_order_kept: "Zlecenie {{id}} - plik zawiera tylko część jego wypełnień (pozostałe są przed początkiem pliku), zostaje pełna wersja z bazy",
     manual_merged: "Transakcja wpisana ręcznie do portfela importowanego ({{symbol}}, {{quantity}}, {{time}}) to ta sama co w pliku - połączono w jeden wpis (dane z giełdy, notatki zostają)",
   },
   missing: {

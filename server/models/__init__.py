@@ -6,3 +6,4 @@ from models.alerts import Alert, AlertEvent  # noqa: F401
 from models.chart_indicators import ChartIndicator  # noqa: F401
 from models.chart_intervals import ChartInterval  # noqa: F401
 from models.imports import AccountMovement, ImportChange, ImportFile  # noqa: F401
+from models.transfers import TransferAddress  # noqa: F401

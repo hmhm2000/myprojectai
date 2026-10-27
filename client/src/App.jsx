@@ -14,6 +14,7 @@ import PortfoliosPage from "./pages/PortfoliosPage";
 import RegisterPage from "./pages/RegisterPage";
 import SettingsPage from "./pages/SettingsPage";
 import TransactionsPage from "./pages/TransactionsPage";
+import TransfersLabPage from "./pages/TransfersLabPage";
 import { LANGUAGE, t } from "./i18n";
 
 // The chart library is large - load the chart page only when it is opened.
@@ -54,6 +55,7 @@ function AppRoutes() {
         <Route path="/transactions" element={<TransactionsPage />} />
         <Route path="/futures" element={<FuturesPage />} />
         <Route path="/import" element={<ImportPage />} />
+        <Route path="/transfers-lab" element={<TransfersLabPage />} />
         <Route path="/favorites" element={<FavoritesPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>

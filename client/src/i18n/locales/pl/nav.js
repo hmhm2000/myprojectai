@@ -6,6 +6,7 @@ export default {
   alerts: "Alerty",
   transactions: "Transakcje",
   futures: "Futures",
+  transfersLab: "Transfery (test)",
   import: "Import",
   favorites: "Ulubione",
   settings: "Ustawienia",

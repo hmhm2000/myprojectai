@@ -106,6 +106,11 @@ export const futuresApi = {
   overview: (portfolioId) => data(api.get(`/api/portfolios/${portfolioId}/futures`)),
 };
 
+export const transfersLabApi = {
+  overview: () => data(api.get("/api/transfers-lab")),
+  label: (body) => api.put("/api/transfers-lab/address", body),
+};
+
 export const journalApi = {
   stats: (portfolioId = null) => data(api.get("/api/journal/stats", { params: portfolioId ? { portfolio_id: portfolioId } : {} })),
 };

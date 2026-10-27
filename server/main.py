@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import models  # noqa: F401  (registers all models)
 from api.routes import (alerts, candles, chart_indicators, chart_intervals, favorites, imports, indicators, journal,
-                        portfolios, prices, users)
+                        portfolios, prices, transfers_lab, users)
 from auth import ensure_admin_account, router as auth_router
 from config import settings
 from core.errors import AppError, app_error_handler
@@ -62,6 +62,7 @@ app.include_router(chart_indicators.router)
 app.include_router(chart_intervals.router)
 app.include_router(alerts.router)
 app.include_router(imports.router)
+app.include_router(transfers_lab.router)
 
 
 @app.get("/api/health", tags=["health"])
