@@ -1,7 +1,7 @@
 // Panel „Import”: pliki eksportu z giełdy w folderze, synchronizacja, wpisy nieobecne w eksporcie.
 export default {
   title: "Import",
-  intro: "Pliki CSV z giełd (OKX, Bybit) z folderu poniżej - także z podfolderów i z plików ZIP. Podfolder to konto: okx/ → „OKX”, bybitEU/ → „Bybit.eu”, bybitCOM/ → „Bybit.com”; format pliku rozpoznaje po zawartości. Każde konto ma własny portfel importowany - import tworzy w nim zwykłe pozycje i sprzedaże, tak jak formularz. Ręczne portfele nie są nigdy zmieniane.",
+  intro: "Pliki CSV z giełd (OKX, Bybit, Binance) z folderu poniżej - także z podfolderów i z plików ZIP. Podfolder to konto: okx/ → „OKX”, bybitEU/ → „Bybit.eu”, bybitCOM/ → „Bybit.com”, binance/ → „Binance”; format pliku rozpoznaje po zawartości. Każde konto ma własny portfel importowany - import tworzy w nim zwykłe pozycje i sprzedaże, tak jak formularz. Ręczne portfele nie są nigdy zmieniane.",
   sync: "Synchronizuj",
   syncing: "Synchronizowanie…",
   reprocess: "Przetwórz ponownie wszystkie pliki",
@@ -11,7 +11,7 @@ export default {
   openDetails: "Szczegóły transakcji: {{name}} →",
   lastSync: "Ostatnia synchronizacja",
   files: "Pliki w folderze",
-  noFiles: "Brak plików CSV ani ZIP w folderze. Wrzuć eksport z OKX lub Bybit do podfolderu konta i kliknij „Synchronizuj”.",
+  noFiles: "Brak plików CSV ani ZIP w folderze. Wrzuć eksport z OKX, Bybit lub Binance do podfolderu konta i kliknij „Synchronizuj”.",
   history: "Historia importów",
   noHistory: "Nic jeszcze nie zaimportowano.",
   counts: "{{total}} wierszy: {{new}} nowych, {{updated}} zmienionych, {{unchanged}} bez zmian, {{skipped}} pominiętych",
@@ -38,6 +38,7 @@ export default {
     closed_positions_skipped: "Lista zamkniętych pozycji Bybit ({{count}}) - pominięta, pozycje są odtwarzane z ledgera (strona Futures); zgodność sprawdzona",
     internal_transfers_skipped: "{{count}} przelewów między własnymi kontami Bybit (Funding, UTA, copy trading) - pominięte, to nie wpłaty ani wypłaty",
     deposit_history_skipped: "Historia wpłat i wypłat ({{count}} wierszy) - pominięta, te same operacje są brane z ledgera konta Funding",
+    fiat_converted: "Zlecenie {{id}} ({{symbol}}) za {{fiat}} - cena przeliczona na USDT kursem {{rate}} {{fiat}}/USDT z najbliższej zamiany w pliku",
     manual_merged: "Transakcja wpisana ręcznie do portfela importowanego ({{symbol}}, {{quantity}}, {{time}}) to ta sama co w pliku - połączono w jeden wpis (dane z giełdy, notatki zostają)",
   },
   missing: {

@@ -2,7 +2,7 @@
 
 Every exchange account has its own import portfolio (kind = "import", source = account, e.g. "OKX"),
 created on the first import - manual portfolios are never used or changed by an import. The account
-is the subfolder of the import folder (okx/, bybitEU/, bybitCOM/ - see ACCOUNTS; the file format is
+is the subfolder of the import folder (okx/, bybitEU/, bybitCOM/, binance/ - see ACCOUNTS; the file format is
 recognised from the content); CSVs inside ZIPs are imported like loose files.
 A purchase becomes a Position and a sale a sale group - created by the same code as the manual form
 (`_write_sale_group`), with `source` / `external_id` / `raw`. Transfers and futures are stored as
@@ -43,6 +43,7 @@ from models.imports import AccountMovement, ImportChange, ImportFile
 from models.portfolio import Portfolio, Position, Sale, utcnow
 from models.user import User
 from services.imports.adapters.base import ImportRecord, ParsedExport
+from services.imports.adapters.binance import BinanceAdapter
 from services.imports.adapters.bybit import BybitAdapter
 from services.imports.adapters.bybit_account import STABLE, BybitAccountAdapter
 from services.imports.adapters.okx import QUOTES, OkxAdapter
@@ -50,12 +51,13 @@ from services.pnl import held_quantity
 
 logger = logging.getLogger(__name__)
 
-ADAPTERS = [OkxAdapter(), BybitAdapter(), BybitAccountAdapter()]
+ADAPTERS = [OkxAdapter(), BybitAdapter(), BybitAccountAdapter(), BinanceAdapter()]
 # import subfolder (lower case) -> (source, portfolio name); files elsewhere use the adapter's own
 ACCOUNTS = {
     "okx": ("okx", "OKX"),
     "bybiteu": ("bybit", "Bybit.eu"),
     "bybitcom": ("bybit_com", "Bybit.com"),
+    "binance": ("binance", "Binance"),
 }
 BALANCE_TOLERANCE = Decimal("0.00000001")
 SALE_NAMESPACE = uuid.UUID("5b0c6f43-6f1e-4d3b-9a43-2f6f0c3e7a11")
