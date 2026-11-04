@@ -23,8 +23,29 @@ function toMarker(m, time) {
   return marker;
 }
 
-// Lightweight Charts shows times in UTC - shift them so the axis shows local time.
-const toChartTime = (unix) => unix - new Date(unix * 1000).getTimezoneOffset() * 60;
+const CLOCK_CHANGE_WINDOW = 7200;     // s - more than any clock change
+
+const utcOffset = (unix) => -new Date(unix * 1000).getTimezoneOffset() * 60;
+
+// Lightweight Charts shows times in UTC - shift them so the axis shows local time. When the clock goes
+// back an hour happens twice, and chart times must keep growing, so both passes share that local hour.
+const toChartTime = (unix) => {
+  const offset = utcOffset(unix);
+  const before = utcOffset(unix - CLOCK_CHANGE_WINDOW);
+  const after = utcOffset(unix + CLOCK_CHANGE_WINDOW);
+  if (before <= after) return unix + offset;
+  let lo = unix - CLOCK_CHANGE_WINDOW;
+  let hi = unix + CLOCK_CHANGE_WINDOW;
+  while (hi - lo > 1) {                 // the moment of the change
+    const mid = Math.floor((lo + hi) / 2);
+    if (utcOffset(mid) === before) lo = mid;
+    else hi = mid;
+  }
+  const repeated = before - after;
+  if (Math.abs(unix - hi) >= repeated) return unix + offset;
+  const start = hi - repeated;
+  return start + before + Math.floor((unix - start) / 2);
+};
 
 function toBars(candles) {
   return candles.map((c) => ({
