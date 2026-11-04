@@ -60,6 +60,7 @@ class ParsedExport:
     balances: dict[str, Decimal] = field(default_factory=dict)  # coin -> balance after the last row
     kinds: Optional[set[str]] = None                  # kinds of entries the file covers (None = all) -
                                                       # only those can be flagged as missing from it
+    only_new: bool = False                            # less exact format: entries already stored stay as they are
 
 
 class ExchangeAdapter(Protocol):

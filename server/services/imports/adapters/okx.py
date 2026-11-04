@@ -13,6 +13,9 @@ history: summed quantity and fees, price = average weighted by quantity, time of
 record's external_id is the Order id; the ids of the fills are kept as legacy_ids (earlier versions
 of the import stored every fill separately - those entries are merged on the next import).
 Transfer rows (Transfer in / out) -> transfers; Futures rows -> futures (stored, not part of spot).
+
+OKX "Trade Details" + "Order History" (one report, Order center > Download): a shorter, less exact
+format, used only to add orders not stored yet - see OkxDetailsAdapter.
 """
 from __future__ import annotations
 
@@ -23,13 +26,20 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Optional
+from zoneinfo import ZoneInfo
 
+from config import settings
 from services.imports.adapters.base import ImportRecord, ParsedExport
 
 QUOTES = {"USDT", "USDC", "USD"}
 PRICE_STEP = Decimal("0.0000000001")       # average price of a multi-fill order
 REQUIRED = {"id", "Order id", "Time", "Trade Type", "Symbol", "Action", "Amount", "Filled Price", "Fee",
             "Fee Unit", "Balance Change", "Balance", "Balance Unit"}
+DETAILS_REQUIRED = {"Order ID", "Trade ID", "Trade Time", "Instrument", "Symbol", "Filled Price", "Trading Volume",
+                    "Fee", "Fee Unit"}
+ORDERS_REQUIRED = {"Order ID", "Order Time", "Instrument", "Symbol", "Side", "Avg. Filled Price", "Status"}
+QUANTITY_STEP = Decimal("0.00000001")
+MAX_FEE_SHARE = Decimal("0.01")            # no real fee is that high: its unit must be wrong
 PERIOD = re.compile(r"(\d{4}-\d{2}-\d{2})~(\d{4}-\d{2}-\d{2})")
 TZ = re.compile(r"Time Zone:\s*UTC\s*([+-])\s*(\d{1,2})(?::?(\d{2}))?", re.I)
 
@@ -180,3 +190,89 @@ class OkxAdapter:
             quantity=_dec(row["Amount"]), occurred_at=when, price=_dec(row["Filled Price"]),
             quote=row["Fee Unit"].strip() or None, fee_quote=-_dec(row["Fee"]),
             value_usd=_dec(row.get("Pnl-USD")), fingerprint=_fingerprint(row), rows=[row], futures=futures)
+
+
+class OkxDetailsAdapter:
+    """"Trade Details" report: one row per fill, with the same Order ID as "Trading History", so an order
+    can't be stored twice. Compared with "Trading History" it has no time zone, no Side, no transfers and
+    its Filled Amount is rounded to 4 places (0.0001 for 0.00012086 BTC), hence:
+    - quantity = Trading Volume / Filled Price, which gives the exact amount,
+    - side from the fee: OKX takes it in what was received (the coin on purchases, the quote on sales);
+      a sale may come with the quote fee labelled as the coin (0.1497 "BNB" on 0.198 BNB sold, no Side in
+      Order History), which shows as a fee no purchase could have,
+    - times are in the zone of the exporting browser - the user's offset at the end of the period,
+    - `only_new`: orders already stored keep their more exact values.
+    The "Order History" file of the same report adds nothing to it and is only acknowledged."""
+    source = "okx"
+    name = "OKX"
+
+    def detect(self, path: Path, head: str) -> bool:
+        lines = head.lstrip("\ufeff").splitlines()
+        if len(lines) < 2 or "UID:" not in lines[0]:
+            return False
+        columns = set(next(csv.reader([lines[1]]), []))
+        return DETAILS_REQUIRED <= columns or ORDERS_REQUIRED <= columns
+
+    def parse(self, path: Path) -> ParsedExport:
+        body = path.read_text(encoding="utf-8-sig").partition("\n")[2]
+        rows = list(csv.DictReader(io.StringIO(body)))
+        result = ParsedExport(source=self.source, records=[], rows_total=len(rows), kinds={"buy", "sell"}, only_new=True)
+        if rows and "Trade ID" not in rows[0]:
+            result.rows_skipped = len(rows)
+            result.warnings.append({"code": "okx_order_history_skipped", "params": {"count": len(rows)}})
+            return result
+
+        match = PERIOD.search(path.name)
+        last = datetime.strptime(match.group(2), "%Y-%m-%d") if match else datetime.now()
+        tz = timezone(ZoneInfo(settings.user_timezone).utcoffset(last))
+        when = lambda row: datetime.strptime(row["Trade Time"].strip(), "%Y-%m-%d %H:%M:%S").replace(tzinfo=tz)
+        if match:
+            start = datetime.strptime(match.group(1), "%Y-%m-%d").replace(tzinfo=tz)
+            result.period = (start, last.replace(tzinfo=tz) + timedelta(days=1))
+        elif rows:
+            times = [when(r) for r in rows]
+            result.period = (min(times), max(times))
+
+        orders: dict[tuple[str, str], list[dict]] = {}
+        futures = 0
+        for row in rows:
+            if row["Instrument"].strip() == "Spot":
+                orders.setdefault((row["Order ID"].strip(), row["Symbol"].strip()), []).append(row)
+            else:
+                futures += 1
+        if futures:
+            result.rows_skipped += futures
+            result.warnings.append({"code": "okx_details_futures_skipped", "params": {"count": futures}})
+        for (order_id, symbol), group in orders.items():
+            self._order(order_id, symbol, group, when, result)
+        result.records.sort(key=lambda r: (r.occurred_at, r.external_id))
+        return result
+
+    def _order(self, order_id, symbol, group, when, result: ParsedExport) -> None:
+        base, _, quote = symbol.partition("-")
+        units = {r["Fee Unit"].strip() for r in group}
+        if quote not in QUOTES:
+            result.rows_skipped += len(group)
+            result.warnings.append({"code": "unsupported_pair", "params": {"symbol": symbol, "order": order_id}})
+            return
+        if units not in ({base}, {quote}):
+            result.rows_skipped += len(group)
+            result.warnings.append({"code": "unsupported_row", "params": {"id": order_id, "type": symbol,
+                                                                         "action": "/".join(sorted(units))}})
+            return
+        side = "buy" if units == {base} else "sell"
+        value = sum((_dec(r["Trading Volume"]) for r in group), Decimal(0))
+        amount = sum((_dec(r["Trading Volume"]) / _dec(r["Filled Price"]) for r in group
+                      if _dec(r["Filled Price"])), Decimal(0)).quantize(QUANTITY_STEP)
+        price = (value / amount).quantize(PRICE_STEP) if amount else Decimal(0)
+        fee = sum((-_dec(r["Fee"]) for r in group), Decimal(0))
+        if side == "buy" and fee > amount * MAX_FEE_SHARE:
+            side = "sell"
+            result.warnings.append({"code": "okx_details_fee_unit", "params": {"id": order_id, "symbol": base}})
+        first = min(group, key=lambda r: r["Trade Time"])
+        result.records.append(ImportRecord(
+            source=self.source, external_id=order_id, kind=side, symbol=base, quantity=amount, occurred_at=when(first),
+            price=price, quote=quote, fee_coin=fee if side == "buy" else Decimal(0),
+            fee_quote=fee if side == "sell" else Decimal(0),
+            fingerprint="|".join((first["Trade Time"].strip(), order_id, side, str(amount), str(price))),
+            rows=group, row_count=len(group)))

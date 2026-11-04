@@ -50,12 +50,12 @@ from services.imports.adapters.base import ImportRecord, ParsedExport
 from services.imports.adapters.binance import BinanceAdapter
 from services.imports.adapters.bybit import BybitAdapter
 from services.imports.adapters.bybit_account import STABLE, BybitAccountAdapter
-from services.imports.adapters.okx import QUOTES, OkxAdapter
+from services.imports.adapters.okx import QUOTES, OkxAdapter, OkxDetailsAdapter
 from services.pnl import held_quantity
 
 logger = logging.getLogger(__name__)
 
-ADAPTERS = [OkxAdapter(), BybitAdapter(), BybitAccountAdapter(), BinanceAdapter()]
+ADAPTERS = [OkxAdapter(), OkxDetailsAdapter(), BybitAdapter(), BybitAccountAdapter(), BinanceAdapter()]
 # import subfolder (lower case) -> (source, portfolio name); files elsewhere use the adapter's own
 ACCOUNTS = {
     "okx": ("okx", "OKX"),
@@ -334,6 +334,9 @@ def _import_parsed(db: Session, user: User, filename: str, sha: str, parsed: Par
         if twins:
             existing = _absorb_manual_twins(db, record, twins, existing, index, result)
             twins_symbols.add((portfolio.id, record.symbol))
+        if existing is not None and parsed.only_new and not twins:
+            result.rows_unchanged += record.row_count
+            continue
         if existing is None:
             owner = index.fingerprints.get(record.fingerprint)
             if record.fingerprint and owner and owner != ext:

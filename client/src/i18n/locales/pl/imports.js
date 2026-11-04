@@ -46,6 +46,9 @@ export default {
     deposit_history_skipped: "Historia wpłat i wypłat ({{count}} wierszy) - pominięta, te same operacje są brane z ledgera konta Funding",
     fiat_converted: "Zlecenie {{id}} ({{symbol}}) za {{fiat}} - cena przeliczona na USDT kursem {{rate}} {{fiat}}/USDT z najbliższej zamiany w pliku",
     partial_order_kept: "Zlecenie {{id}} - plik zawiera tylko część jego wypełnień (pozostałe są przed początkiem pliku), zostaje pełna wersja z bazy",
+    okx_order_history_skipped: "Order History OKX ({{count}} zleceń) - pominięte, transakcje są brane z pliku Trade Details z tego samego raportu",
+    okx_details_fee_unit: "Zlecenie {{id}} ({{symbol}}) - prowizja opisana w złej walucie, potraktowane jako sprzedaż; sprawdź ten wpis",
+    okx_details_futures_skipped: "{{count}} wierszy futures w Trade Details - pominięte; futures importuje się z raportu Trading History",
     manual_merged: "Transakcja wpisana ręcznie do portfela importowanego ({{symbol}}, {{quantity}}, {{time}}) to ta sama co w pliku - połączono w jeden wpis (dane z giełdy, notatki zostają)",
   },
   missing: {
