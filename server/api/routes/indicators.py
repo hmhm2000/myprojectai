@@ -59,6 +59,7 @@ class IndicatorValuesOut(BaseModel):
     time: list[int]
     closed: list[bool]
     outputs: dict[str, list[Optional[float]]]
+    drawings: list[dict] = []
 
 
 @router.get("", response_model=list[IndicatorOut])
@@ -93,4 +94,4 @@ def indicator_values(
     result = compute_indicator(candle_service, indicator_id, raw, symbol.strip().upper(), interval,
                                start, end or int(now), now, indicator_interval=indicator_interval)
     return IndicatorValuesOut(indicator=result.indicator_id, params=result.params, time=result.time,
-                              closed=result.closed, outputs=result.outputs)
+                              closed=result.closed, outputs=result.outputs, drawings=list(result.drawings))

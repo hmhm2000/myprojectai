@@ -20,6 +20,7 @@ class IndicatorResult:
     time: list[int]                 # candle open times in the requested range
     closed: list[bool]              # False for the still-forming candle (value may still change)
     outputs: dict[str, Series]
+    drawings: tuple = ()            # shapes changed in the requested range (see indicators/base.py)
 
 
 def _end_fn(interval):
@@ -84,6 +85,7 @@ def compute_indicator(candle_service, indicator_id: str, raw_params: Optional[di
     data = OHLCV.from_candles(series.candles, DataContext(candle_service, symbol, source_interval, now,
                                                           chart_outputs(indicator)))
     outputs = indicator.compute(data, params)
+    drawings = tuple(item for item in outputs.pop("drawings", ()) if item["until"] >= start)
 
     if source_interval == interval:
         first = next((i for i, t in enumerate(data.time) if t >= chart_spec.bucket_start(start)), len(data.time))
@@ -93,6 +95,7 @@ def compute_indicator(candle_service, indicator_id: str, raw_params: Optional[di
             time=data.time[first:],
             closed=[series.is_closed(c, now) for c in series.candles[first:]],
             outputs={name: values[first:] for name, values in outputs.items()},
+            drawings=drawings,
         )
 
     chart_times = chart_spec.times(start, end)
@@ -103,4 +106,5 @@ def compute_indicator(candle_service, indicator_id: str, raw_params: Optional[di
         closed=[chart_spec.is_closed(t, now) for t in chart_times],
         outputs={name: map_to_chart(data.time, source_spec, values, chart_times, chart_spec, now)
                  for name, values in outputs.items()},
+        drawings=drawings,
     )

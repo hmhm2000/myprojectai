@@ -1,6 +1,7 @@
 import { BaselineSeries, HistogramSeries, LineSeries, LineStyle, LineType, createSeriesMarkers } from "lightweight-charts";
 import { resolveColor } from "../../lib/indicatorMeta";
 import { BackgroundSeries, BandSeries } from "./bandSeries";
+import { HarmonicPrimitive } from "./harmonicPatterns";
 
 // How each output plot type (see server indicators/base.py Output) is drawn with Lightweight Charts.
 
@@ -55,7 +56,8 @@ const paletteOf = (output, params) => (output.palette ?? []).map((c) => resolveC
 
 /** Series for every drawn output of an indicator: { [output]: { series, markers? } }.
  * `axisValue` - show the last value of the lines as a label on the price axis. */
-export function createOutputSeries(chart, def, params, paneIndex, axisValue = true) {
+export function createOutputSeries(api, def, params, paneIndex, axisValue = true) {
+  const { chart } = api;
   const result = {};
   for (const output of def.outputs) {
     const color = colorOf(output, params);
@@ -71,6 +73,12 @@ export function createOutputSeries(chart, def, params, paneIndex, axisValue = tr
       case "barcolor":
         result[output.name] = { barcolor: true };   // colors the price candles (CandleChart.setBarColors)
         continue;
+      case "harmonic": {
+        const primitive = new HarmonicPrimitive(api, { bull: output.name === "bull", color, width: output.width ?? 2, params });
+        api.candles.attachPrimitive(primitive);
+        result[output.name] = { primitive };
+        continue;
+      }
       case "background":
         series = chart.addCustomSeries(new BackgroundSeries(), { color, priceLineVisible: false, lastValueVisible: false }, paneIndex);
         break;
@@ -123,6 +131,11 @@ export function drawOutputs(api, layer) {
       return index === null || index === undefined ? null : palette[index];
     };
 
+    if (output.plot === "harmonic") {
+      target.primitive.setPatterns([...layer.drawings.values()]);
+      continue;
+    }
+
     if (output.plot === "barcolor") {
       const shown = values.get(output.name);
       const colors = new Map();
@@ -172,8 +185,12 @@ export function drawOutputs(api, layer) {
 }
 
 export function removeOutputSeries(api, seriesMap) {
-  for (const { series, markers, barcolor } of Object.values(seriesMap)) {
+  for (const { series, markers, barcolor, primitive } of Object.values(seriesMap)) {
     try {
+      if (primitive) {
+        api.candles.detachPrimitive(primitive);
+        continue;
+      }
       if (barcolor) {
         api.setBarColors?.(null);
         continue;

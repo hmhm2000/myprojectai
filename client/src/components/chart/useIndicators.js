@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { indicatorsApi } from "../../api/endpoints";
+import { isLive } from "./harmonicPatterns";
 import { PRICE_PANE_SHARE, createOutputSeries, drawOutputs, paneHeight, removeOutputSeries, styledDef } from "./indicatorSeries";
 
 const TAIL_STEPS = 5; // on refresh only the newest candles are recomputed
@@ -14,7 +15,7 @@ function restore(known, first) {
   if (known.first >= first) return known;
   const values = new Map([...known.values].map(([name, byTime]) =>
     [name, new Map([...byTime].filter(([unix]) => unix >= first))]));
-  return { values, first, last: known.last };
+  return { values, drawings: known.drawings, first, last: known.last };
 }
 
 // Fetched values per chart (symbol|interval) -> uid -> { values, first, last }, shared by all chart windows.
@@ -68,6 +69,11 @@ export function useIndicators(api, active, definitions, symbol, interval, paneHe
         layer.values.get(name).set(unix, values[i]);
       }
     });
+    // Unfinished shapes change or disappear, so the newest candles replace them. Older history ends in
+    // the past: what looks unfinished there was finished later and comes with the newer candles.
+    const newest = layer.last === null || end >= layer.last;
+    if (newest) for (const [id, shape] of layer.drawings) if (isLive(shape)) layer.drawings.delete(id);
+    for (const shape of result.drawings) if (newest || !isLive(shape)) layer.drawings.set(shape.id, shape);
     layer.first = Math.min(layer.first ?? start, start);
     layer.last = Math.max(layer.last ?? end, end);
     draw(layer);
@@ -98,12 +104,12 @@ export function useIndicators(api, active, definitions, symbol, interval, paneHe
           defaults[paneIndex] = paneHeight(def);
           paneItems[paneIndex] = itemId;
         }
-        const series = createOutputSeries(api.chart, def, params, paneIndex, axisValue);
+        const series = createOutputSeries(api, def, params, paneIndex, axisValue);
         const firstSeries = Object.values(series).find((s) => s.series)?.series;
         def.levels.forEach((price) => firstSeries?.createPriceLine({ price, color: "rgba(161,161,170,0.4)", lineStyle: 2, lineWidth: 1, axisLabelVisible: false }));
         const known = restore(saved.get(uid), first);
         return { uid, id, def, params, interval: ownInterval ?? null, series, values: known?.values ?? new Map(),
-          first: known?.first ?? null, last: known?.last ?? null };
+          drawings: known?.drawings ?? new Map(), first: known?.first ?? null, last: known?.last ?? null };
       })
       .filter(Boolean);
 
@@ -165,7 +171,7 @@ export function useIndicators(api, active, definitions, symbol, interval, paneHe
       cancelAnimationFrame(frame);
       relayout.current = null;
       for (const layer of layers.current) {
-        saved.set(layer.uid, { values: layer.values, first: layer.first, last: layer.last });
+        saved.set(layer.uid, { values: layer.values, drawings: layer.drawings, first: layer.first, last: layer.last });
         if (!api.removed) removeOutputSeries(api, layer.series);
         layer.series = {};
       }

@@ -1,7 +1,9 @@
 """Indicator definitions and registry.
 
 An indicator declares its parameters, outputs and how to draw them; `compute` gets the candles
-(as float lists) plus validated params and returns one series per output, aligned with the candles.
+(as float lists) plus validated params and returns one series per output, aligned with the candles;
+what is not a value per candle (e.g. harmonic patterns) goes under the "drawings" key as a list of dicts,
+each with "id" and "until" (time of its last change).
 The same definition is used by the chart API, alerts and analysis.
 
 Adding an indicator: create a module in indicators/ (built-in) or indicators/custom/ (ports of your
@@ -115,6 +117,7 @@ class Output:
       "signal" - 1 = BUY, -1 = SELL markers,
       "background" - colors the whole pane behind candles where the value is 1 (Pine bgcolor),
       "barcolor"   - colors the price candles (Pine barcolor), color from `palette`,
+      "harmonic"   - patterns from "drawings", one side per output (bull / bear), own canvas layer,
       "none"   - not drawn (helper series, alert conditions).
     Per-point colors: the indicator also returns "<name>:color" = index into `palette` (None = not drawn).
     """

@@ -3,7 +3,7 @@ import ColorPicker from "../ColorPicker";
 import { drawnOutputs, outputLabel, resolveColor } from "../../lib/indicatorMeta";
 
 const LINE_STYLE_NAMES = ["solid", "dashed", "dotted", "large_dashed", "sparse_dotted"];
-const WIDTH_PLOTS = new Set(["line", "stepline", "area", "points"]);
+const WIDTH_PLOTS = new Set(["harmonic", "line", "stepline", "area", "points"]);
 const LINE_STYLE_PLOTS = new Set(["line", "stepline", "area"]);
 const FALLBACK = "#a1a1aa";
 
