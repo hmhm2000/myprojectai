@@ -36,6 +36,11 @@ class MissingActionIn(BaseModel):
     id: str
 
 
+class FolderIn(BaseModel):
+    folder: str = Field(max_length=255)     # "" = files lying directly in the import folder
+    selected: bool
+
+
 class DetailsIn(BaseModel):
     note: Optional[str] = Field(None, max_length=4000)
     custom_fields: Optional[dict[str, str]] = None
@@ -72,19 +77,35 @@ def _status(db: Session, user: User) -> dict:
     folder = Path(settings.import_dir)
     folder.mkdir(parents=True, exist_ok=True)
     imported = {f.sha256: f for f in db.query(ImportFile).filter(ImportFile.user_id == user.id)}
+    skipped = importer.skipped_folders(user)
     files = []
     for entry in importer.import_entries(folder):
-        data = entry.read_bytes()
+        name = entry.account or ""
+        if name in skipped:                 # unticked: not read at all
+            files.append({"filename": entry.label, "folder": name, "status": "skipped", "import": None})
+            continue
+        try:
+            data = entry.read_bytes()
+        except importer.READ_ERRORS:
+            files.append({"filename": entry.label, "folder": name, "status": "error", "import": None})
+            continue
         sha = hashlib.sha256(data).hexdigest()
         row = imported.get(sha)
-        files.append({"filename": entry.label, "size": len(data),
+        status = "imported" if row else "new" if importer.detect_adapter(Path(entry.name), data) else "unrecognized"
+        files.append({"filename": entry.label, "folder": name, "size": len(data),
                       "modified": datetime.fromtimestamp(entry.path.stat().st_mtime), "sha256": sha,
-                      "status": "imported" if row else "new", "import": _file_out(row) if row else None})
+                      "status": status, "import": _file_out(row) if row else None})
+    folders = []
+    for name in importer.import_folders(folder):
+        mine = [f for f in files if f["folder"] == name]
+        account = importer.ACCOUNTS.get(name.lower())
+        folders.append({"name": name, "portfolio": account[1] if account else None, "selected": name not in skipped,
+                        "files": len(mine), "new": sum(f["status"] == "new" for f in mine)})
     history = (db.query(ImportFile).filter(ImportFile.user_id == user.id)
                .order_by(ImportFile.imported_at.desc(), ImportFile.id.desc()).limit(50).all())
     portfolios = (db.query(Portfolio).filter(Portfolio.user_id == user.id, Portfolio.kind == "import")
                   .order_by(Portfolio.id).all())
-    return {"folder": str(folder.resolve()),
+    return {"folder": str(folder.resolve()), "folders": folders,
             "portfolios": [{"id": p.id, "name": p.name, "source": p.source} for p in portfolios],
             "files": files, "history": [_file_out(h) for h in history], "last_sync": _last_sync.get(user.id, []),
             "missing": _missing(db, user)}
@@ -95,16 +116,26 @@ def import_status(user: User = Depends(get_current_user), db: Session = Depends(
     return _status(db, user)
 
 
+@router.put("/api/import/folders")
+def select_folder(data: FolderIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Tick or untick a subfolder for the sync - remembered per user, also for the import at start-up."""
+    skipped = set(importer.skipped_folders(user))
+    skipped = skipped - {data.folder} if data.selected else skipped | {data.folder}
+    user.import_skipped_folders = json.dumps(sorted(skipped))
+    db.commit()
+    return _status(db, user)
+
+
 @router.post("/api/import/sync")
 def import_sync(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Import every new file from the folder ("Synchronizuj")."""
+    """Import every new file from the ticked folders ("Synchronizuj")."""
     _last_sync[user.id] = [r.__dict__ for r in importer.sync_folder(db, user)]
     return _status(db, user)
 
 
 @router.post("/api/import/reprocess")
 def import_reprocess(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Go through every file of the folder again, also the imported ones (same upsert - no duplicates)."""
+    """Go through every file of the ticked folders again, also the imported ones (same upsert - no duplicates)."""
     _last_sync[user.id] = [r.__dict__ for r in importer.sync_folder(db, user, reprocess=True)]
     return _status(db, user)
 

@@ -148,6 +148,8 @@ def overview(db: Session, user: User, prices: dict[str, Optional[Decimal]]) -> d
     folder = Path(settings.import_dir)
     files, events = [], []
     for entry in import_entries(folder) if folder.exists() else []:
+        if Path(entry.name).suffix.lower() != ".csv":
+            continue
         exchange = ACCOUNTS.get((entry.account or "").lower(), (entry.account or "?", ""))[0]
         kind, found, other = _read(entry, exchange)
         if kind:

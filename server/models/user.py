@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Integer, String
+from sqlalchemy import Boolean, Column, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from database.db import Base
@@ -11,6 +11,7 @@ class User(Base):
     email = Column(String, unique=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     is_admin = Column(Boolean, default=False, nullable=False)
+    import_skipped_folders = Column(Text)    # JSON list of unticked import subfolders ("" = the main folder)
 
     portfolios = relationship("Portfolio", back_populates="user", cascade="all, delete-orphan")
     favorite_lists = relationship("FavoriteList", back_populates="user", cascade="all, delete-orphan")

@@ -49,7 +49,25 @@ function Warnings({ warnings }) {
   );
 }
 
-/** Import panel: export files in the folder, "Synchronizuj", target portfolio and flagged entries. */
+/** One subfolder of the import folder: ticked ones are synchronized (the choice is remembered). */
+function FolderTile({ folder, disabled, onChange }) {
+  return (
+    <label className={`tile flex cursor-pointer items-start gap-2 p-3 text-sm ${folder.selected ? "" : "opacity-60"}`}>
+      <input type="checkbox" className="mt-0.5" checked={folder.selected} disabled={disabled}
+        onChange={(event) => onChange(folder.name, event.target.checked)} />
+      <span className="min-w-0">
+        <span className="block break-all text-zinc-200">{folder.name || t("imports.mainFolder")}</span>
+        {folder.portfolio && <span className="block text-xs text-zinc-500">{folder.portfolio}</span>}
+        <span className="block text-xs text-zinc-500">
+          {t("imports.folderFiles", { count: folder.files })}
+          {folder.new > 0 && <span className="text-neon-violet"> · {t("imports.folderNew", { count: folder.new })}</span>}
+        </span>
+      </span>
+    </label>
+  );
+}
+
+/** Import panel: folders to synchronize, their files, target portfolio and flagged entries. */
 export default function ImportPage() {
   const [status, setStatus] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -74,6 +92,8 @@ export default function ImportPage() {
 
   if (!status) return <p className="text-sm text-zinc-500">{error ?? t("common.loading")}</p>;
 
+  const files = status.files.filter((f) => f.status !== "skipped");
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -96,6 +116,17 @@ export default function ImportPage() {
       <section className="tile space-y-3 p-4">
         <div className="text-sm text-zinc-400">
           {t("imports.folder")}: <code className="break-all text-zinc-200">{status.folder}</code>
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">{t("imports.folders")}</h2>
+          <p className="text-xs text-zinc-500">{t("imports.foldersHint")}</p>
+        </div>
+        {status.folders.length === 0 && <p className="text-sm text-zinc-500">{t("imports.noFolders")}</p>}
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {status.folders.map((f) => (
+            <FolderTile key={f.name} folder={f} disabled={busy}
+              onChange={(name, selected) => run(() => importApi.selectFolder(name, selected))} />
+          ))}
         </div>
         <p className="text-xs text-zinc-500">{t("imports.portfolioHint")}</p>
         {status.portfolios.length > 0 && (
@@ -130,9 +161,9 @@ export default function ImportPage() {
 
       <section className="tile p-4">
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-zinc-400">{t("imports.files")}</h2>
-        {status.files.length === 0 && <p className="text-sm text-zinc-500">{t("imports.noFiles")}</p>}
+        {files.length === 0 && <p className="text-sm text-zinc-500">{t("imports.noFiles")}</p>}
         <ul className="divide-y divide-white/[0.04]">
-          {status.files.map((f) => (
+          {files.map((f) => (
             <li key={f.filename} className="py-2 text-sm">
               <div className="flex flex-wrap items-baseline gap-x-3">
                 <span className="break-all text-zinc-200">{f.filename}</span>

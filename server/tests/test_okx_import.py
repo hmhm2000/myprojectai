@@ -254,7 +254,7 @@ def test_folder_sync_and_status(tmp_path, client, user):
     results = {r["filename"]: r["status"] for r in status["last_sync"]}
     assert results == {full_name(): "imported", "notes.csv": "unrecognized"}
     files = {f["filename"]: f["status"] for f in status["files"]}
-    assert files[full_name()] == "imported" and files["notes.csv"] == "new"
+    assert files[full_name()] == "imported" and files["notes.csv"] == "unrecognized"
     (folder / full_name()).unlink()                                          # removing the file deletes nothing
     status = client.post("/api/import/sync", headers=headers).json()
     with SessionLocal() as db:

@@ -2,8 +2,9 @@
 
 Every exchange account has its own import portfolio (kind = "import", source = account, e.g. "OKX"),
 created on the first import - manual portfolios are never used or changed by an import. The account
-is the subfolder of the import folder (okx/, bybitEU/, bybitCOM/, binance/ - see ACCOUNTS; the file format is
-recognised from the content); CSVs inside ZIPs are imported like loose files.
+is the subfolder of the import folder (okx/, bybitEU/, bybitCOM/, binance/ - see ACCOUNTS); every file there,
+also inside ZIPs, is checked by its content, whatever its name - what no adapter knows is reported as
+unrecognized. Subfolders unticked by the user (User.import_skipped_folders) are not imported.
 A purchase becomes a Position and a sale a sale group - created by the same code as the manual form
 (`_write_sale_group`), with `source` / `external_id` / `raw`. Transfers and futures are stored as
 AccountMovements (details view only). Rules:
@@ -62,6 +63,8 @@ ACCOUNTS = {
     "bybitcom": ("bybit_com", "Bybit.com"),
     "binance": ("binance", "Binance"),
 }
+IGNORED_FILES = {"desktop.ini", "thumbs.db", ".ds_store"}
+READ_ERRORS = (OSError, RuntimeError, zipfile.BadZipFile)    # file locked by another program, ZIP with a password
 BALANCE_TOLERANCE = Decimal("0.00000001")
 SALE_NAMESPACE = uuid.UUID("5b0c6f43-6f1e-4d3b-9a43-2f6f0c3e7a11")
 _lock = threading.Lock()
@@ -101,7 +104,7 @@ class SaleDef:
 
 @dataclass(frozen=True)
 class ImportEntry:
-    """One export file: a CSV in the import folder (or a subfolder) or a CSV inside a ZIP there."""
+    """One file in the import folder (or a subfolder), or inside a ZIP there."""
     path: Path
     label: str                          # shown in the panel: path in the folder (" > member" for a ZIP)
     account: Optional[str] = None       # first subfolder, e.g. "bybitCOM" - decides the portfolio
@@ -122,27 +125,43 @@ def sha256_of(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _ignored(name: str) -> bool:
+    """System files and the lock files of open documents - not exports."""
+    return name.lower() in IGNORED_FILES or name.startswith((".", "~$"))
+
+
 def import_entries(folder: Path) -> list[ImportEntry]:
-    """CSV files of the folder and its subfolders, also inside ZIPs - per account, by file name (the
-    names hold the dates, so an account's files go roughly from the oldest)."""
+    """Files of the folder and its subfolders, also inside ZIPs - per account, by file name (the names
+    hold the dates, so an account's files go roughly from the oldest). A ZIP that can't be opened or
+    holds no files is listed itself, so it shows up as unrecognized instead of disappearing."""
     entries = []
     for path in folder.rglob("*"):
-        suffix = path.suffix.lower()
-        if not path.is_file() or suffix not in (".csv", ".zip"):
+        if not path.is_file() or _ignored(path.name):
             continue
         relative = path.relative_to(folder)
         account = relative.parts[0] if len(relative.parts) > 1 else None
-        if suffix == ".csv":
+        members = []
+        if path.suffix.lower() == ".zip":
+            try:
+                with zipfile.ZipFile(path) as archive:
+                    members = [m for m in archive.namelist() if not m.endswith("/") and not _ignored(Path(m).name)]
+            except zipfile.BadZipFile:
+                logger.warning("Import: %s is not a valid ZIP", path)
+        if not members:
             entries.append(ImportEntry(path, relative.as_posix(), account))
-            continue
-        try:
-            with zipfile.ZipFile(path) as archive:
-                members = [m for m in archive.namelist() if m.lower().endswith(".csv")]
-        except zipfile.BadZipFile:
-            logger.warning("Import: %s is not a valid ZIP", path)
-            continue
         entries += [ImportEntry(path, f"{relative.as_posix()} > {m}", account, m) for m in members]
     return sorted(entries, key=lambda e: ((e.account or "").lower(), e.name, e.label))
+
+
+def skipped_folders(user: User) -> list[str]:
+    return json.loads(user.import_skipped_folders or "[]")
+
+
+def import_folders(folder: Path) -> list[str]:
+    """The subfolders of the import folder, read from the disk ("" = files lying directly in it)."""
+    names = sorted((p.name for p in folder.iterdir() if p.is_dir() and not _ignored(p.name)), key=str.lower)
+    loose = any(p.is_file() and not _ignored(p.name) for p in folder.iterdir())
+    return [""] * loose + names
 
 
 @contextmanager
@@ -167,8 +186,8 @@ def local_time(moment: datetime) -> datetime:
     return moment.astimezone(ZoneInfo(settings.user_timezone)).replace(tzinfo=None)
 
 
-def detect_adapter(path: Path):
-    head = path.read_bytes()[:4096].decode("utf-8-sig", errors="replace")
+def detect_adapter(path: Path, data: Optional[bytes] = None):
+    head = (path.read_bytes() if data is None else data)[:4096].decode("utf-8-sig", errors="replace")
     return next((a for a in ADAPTERS if a.detect(path, head)), None)
 
 
@@ -231,14 +250,16 @@ class _Index:
 # ------------------------------------------------------------------ public
 
 def sync_folder(db: Session, user: User, folder: Path = None, reprocess: bool = False) -> list[FileResult]:
-    """Import every new file of the folder and its subfolders, ZIPs included (folder created if missing).
-    Removing a file deletes nothing.
+    """Import every new file of the folder and its subfolders, ZIPs included (folder created if missing),
+    leaving out the subfolders unticked by the user. Removing a file deletes nothing.
     `reprocess` also goes through files imported before (e.g. after a change of the import rules) -
     the same upsert, so nothing is duplicated and manual fields stay."""
     folder = Path(folder or settings.import_dir)
     folder.mkdir(parents=True, exist_ok=True)
+    skipped = set(skipped_folders(user))
     with _lock:
-        return [import_file(db, user, entry, reprocess) for entry in import_entries(folder)]
+        return [import_file(db, user, entry, reprocess) for entry in import_entries(folder)
+                if (entry.account or "") not in skipped]
 
 
 def import_file(db: Session, user: User, entry, reprocess: bool = False) -> FileResult:
@@ -246,7 +267,10 @@ def import_file(db: Session, user: User, entry, reprocess: bool = False) -> File
     if isinstance(entry, Path):
         entry = ImportEntry(entry, entry.name)
     name = entry.name
-    data = entry.read_bytes()
+    try:
+        data = entry.read_bytes()
+    except READ_ERRORS as exc:
+        return FileResult(name, "error", message=str(exc)[:300])
     sha = hashlib.sha256(data).hexdigest()
     known = db.query(ImportFile).filter(ImportFile.user_id == user.id, ImportFile.sha256 == sha).first()
     if known and not reprocess:
