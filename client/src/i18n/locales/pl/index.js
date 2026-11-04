@@ -21,7 +21,6 @@ import prices from "./prices.js";
 import sale from "./sale.js";
 import settings from "./settings.js";
 import transactions from "./transactions.js";
-import transfersLab from "./transfersLab.js";
 
 export default {
   meta: {
@@ -45,6 +44,5 @@ export default {
   prices,
   sale,
   transactions,
-  transfersLab,
   settings,
 };

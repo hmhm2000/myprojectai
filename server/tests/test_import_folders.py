@@ -86,7 +86,6 @@ def test_every_file_is_checked_by_its_content(client):
             "okx/broken.zip": "unrecognized", "okx/empty.zip": "unrecognized",
             "okx/mixed.zip > inner/notes.pdf": "unrecognized"}
         assert {r["filename"]: r["status"] for r in status["last_sync"]}["export.txt"] == "imported"
-        assert client.get("/api/transfers-lab", headers=headers).status_code == 200
     finally:
         shutil.rmtree(folder, ignore_errors=True)
 
