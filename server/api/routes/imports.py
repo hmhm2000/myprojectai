@@ -36,6 +36,10 @@ class MissingActionIn(BaseModel):
     id: str
 
 
+class SyncIn(BaseModel):
+    files: Optional[list[str]] = None       # files ticked in the panel; none given = all new ones
+
+
 class FolderIn(BaseModel):
     folder: str = Field(max_length=255)     # "" = files lying directly in the import folder
     selected: bool
@@ -80,21 +84,26 @@ def _status(db: Session, user: User) -> dict:
     skipped = importer.skipped_folders(user)
     files = []
     for entry in importer.import_entries(folder):
+        if entry.path.suffix.lower() == ".zip":     # not listed: the user unpacks what should be imported
+            continue
         name = entry.account or ""
+        modified = datetime.fromtimestamp(entry.path.stat().st_mtime)
         if name in skipped:                 # unticked: not read at all
-            files.append({"filename": entry.label, "folder": name, "status": "skipped", "import": None})
+            files.append({"filename": entry.label, "folder": name, "modified": modified, "status": "skipped",
+                          "import": None})
             continue
         try:
             data = entry.read_bytes()
         except importer.READ_ERRORS:
-            files.append({"filename": entry.label, "folder": name, "status": "error", "import": None})
+            files.append({"filename": entry.label, "folder": name, "modified": modified, "status": "error",
+                          "import": None})
             continue
         sha = hashlib.sha256(data).hexdigest()
         row = imported.get(sha)
         status = "imported" if row else "new" if importer.detect_adapter(Path(entry.name), data) else "unrecognized"
-        files.append({"filename": entry.label, "folder": name, "size": len(data),
-                      "modified": datetime.fromtimestamp(entry.path.stat().st_mtime), "sha256": sha,
+        files.append({"filename": entry.label, "folder": name, "size": len(data), "modified": modified, "sha256": sha,
                       "status": status, "import": _file_out(row) if row else None})
+    files.sort(key=lambda f: (f["modified"], f["filename"]), reverse=True)      # the newest on top
     folders = []
     for name in importer.import_folders(folder):
         mine = [f for f in files if f["folder"] == name]
@@ -127,9 +136,10 @@ def select_folder(data: FolderIn, user: User = Depends(get_current_user), db: Se
 
 
 @router.post("/api/import/sync")
-def import_sync(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Import every new file from the ticked folders ("Synchronizuj")."""
-    _last_sync[user.id] = [r.__dict__ for r in importer.sync_folder(db, user)]
+def import_sync(data: Optional[SyncIn] = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Import the files ticked in the panel, or every new file of the ticked folders."""
+    only = set(data.files) if data and data.files is not None else None
+    _last_sync[user.id] = [r.__dict__ for r in importer.sync_folder(db, user, only=only)]
     return _status(db, user)
 
 

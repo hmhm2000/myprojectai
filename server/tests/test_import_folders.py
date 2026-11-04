@@ -1,4 +1,5 @@
 """Import folders: tiles read from the disk, remembered choice, files checked by their content."""
+import os
 import shutil
 import zipfile
 from pathlib import Path
@@ -82,10 +83,28 @@ def test_every_file_is_checked_by_its_content(client):
     try:
         status = client.post("/api/import/sync", headers=headers).json()
         assert {f["filename"]: f["status"] for f in status["files"]} == {
-            "okx/export.txt": "imported", "okx/statement.pdf": "unrecognized", "okx/trades.xlsx": "unrecognized",
-            "okx/broken.zip": "unrecognized", "okx/empty.zip": "unrecognized",
-            "okx/mixed.zip > inner/notes.pdf": "unrecognized"}
-        assert {r["filename"]: r["status"] for r in status["last_sync"]}["export.txt"] == "imported"
+            "okx/export.txt": "imported", "okx/statement.pdf": "unrecognized", "okx/trades.xlsx": "unrecognized"}
+        results = {r["filename"]: r["status"] for r in status["last_sync"]}
+        assert results["export.txt"] == "imported" and results["notes.pdf"] == "unrecognized"
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
+def test_only_the_chosen_files_are_imported_and_the_newest_is_on_top(client):
+    headers = login(client)
+    folder = _folder()
+    older = write_okx(folder / "okx", full_name(), range(1, 4))
+    newer = write(folder / "bybitEU", JAN_MAR, range(1, 4))
+    os.utime(older, (1_700_000_000, 1_700_000_000))
+    os.utime(newer, (1_800_000_000, 1_800_000_000))
+    try:
+        status = client.get("/api/import", headers=headers).json()
+        assert [f["filename"] for f in status["files"]] == [f"bybitEU/{JAN_MAR}", f"okx/{full_name()}"]
+        status = client.post("/api/import/sync", json={"files": [f"bybitEU/{JAN_MAR}"]}, headers=headers).json()
+        assert [r["filename"] for r in status["last_sync"]] == [JAN_MAR]
+        assert [f["status"] for f in status["files"]] == ["imported", "new"]
+        status = client.post("/api/import/sync", json={"files": []}, headers=headers).json()
+        assert status["last_sync"] == [] and status["files"][1]["status"] == "new"
     finally:
         shutil.rmtree(folder, ignore_errors=True)
 

@@ -249,9 +249,11 @@ class _Index:
 
 # ------------------------------------------------------------------ public
 
-def sync_folder(db: Session, user: User, folder: Path = None, reprocess: bool = False) -> list[FileResult]:
+def sync_folder(db: Session, user: User, folder: Path = None, reprocess: bool = False,
+                only: Optional[set[str]] = None) -> list[FileResult]:
     """Import every new file of the folder and its subfolders, ZIPs included (folder created if missing),
-    leaving out the subfolders unticked by the user. Removing a file deletes nothing.
+    leaving out the subfolders unticked by the user; `only` limits it to these files (labels of the
+    panel). Removing a file deletes nothing.
     `reprocess` also goes through files imported before (e.g. after a change of the import rules) -
     the same upsert, so nothing is duplicated and manual fields stay."""
     folder = Path(folder or settings.import_dir)
@@ -259,7 +261,7 @@ def sync_folder(db: Session, user: User, folder: Path = None, reprocess: bool = 
     skipped = set(skipped_folders(user))
     with _lock:
         return [import_file(db, user, entry, reprocess) for entry in import_entries(folder)
-                if (entry.account or "") not in skipped]
+                if (entry.account or "") not in skipped and (only is None or entry.label in only)]
 
 
 def import_file(db: Session, user: User, entry, reprocess: bool = False) -> FileResult:
